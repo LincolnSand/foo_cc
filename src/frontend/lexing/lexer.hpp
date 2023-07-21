@@ -22,6 +22,12 @@ enum class token_type_t : std::uint32_t {
     TILDE,
     BANG,
     PLUS, ASTERISK, SLASH,
+    LESS_THAN, GREATER_THAN,
+
+    // two character lexemes:
+    LOGIC_AND, LOGIC_OR,
+    EQUAL_EQUAL, NOT_EQUAL,
+    LESS_THAN_EQUAL, GREATER_THAN_EQUAL,
 
     // constants:
     INT_CONSTANT,

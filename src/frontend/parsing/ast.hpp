@@ -19,13 +19,29 @@ enum class unary_op_t : std::uint16_t {
 };
 
 // binary ops:
+enum class times_divide_t : std::uint16_t {
+    TIMES = 0,
+    DIVIDE,
+};
 enum class plus_minus_t : std::uint16_t {
     PLUS = 0,
     MINUS,
 };
-enum class times_divide_t : std::uint16_t {
-    TIMES = 0,
-    DIVIDE,
+enum class relational_t : std::uint16_t {
+    LESS_THAN = 0,
+    GREATER_THAN,
+    LESS_THAN_EQUAL,
+    GREATER_THAN_EQUAL,
+};
+enum class equality_t : std::uint16_t {
+    EQUAL_EQUAL = 0,
+    NOT_EQUAL,
+};
+enum class logical_and_t : std::uint16_t {
+    AND = 0,
+};
+enum class logical_or_t : std::uint16_t {
+    OR = 0,
 };
 
 
@@ -33,35 +49,66 @@ struct constant_t {
     int value;
 };
 
-struct unop_t;
+
+struct unary_op_expression_t;
 struct grouping_t;
-struct plus_minus_expression_t;
-struct times_divide_expression_t;
+struct times_divide_binary_expression_t;
+struct plus_minus_binary_expression_t;
+struct relational_binary_expression_t;
+struct equality_binary_expression_t;
+struct logical_and_binary_expression_t;
+struct logical_or_binary_expression_t;
 // `std::shared_ptr` is to get around not having full recursive type definitions in C++
-using factor_t = std::variant<std::shared_ptr<grouping_t>, std::shared_ptr<unop_t>, constant_t>;
-using term_t = std::variant<std::shared_ptr<times_divide_expression_t>, factor_t>; 
-using expression_t = std::variant<std::shared_ptr<plus_minus_expression_t>, term_t>;
+using factor_t = std::variant<std::shared_ptr<grouping_t>, std::shared_ptr<unary_op_expression_t>, constant_t>;
+using times_divide_expression_t = std::variant<std::shared_ptr<times_divide_binary_expression_t>, factor_t>; 
+using plus_minus_expression_t = std::variant<std::shared_ptr<plus_minus_binary_expression_t>, times_divide_expression_t>;
+using relational_expression_t = std::variant<std::shared_ptr<relational_binary_expression_t>, plus_minus_expression_t>;
+using equality_expression_t = std::variant<std::shared_ptr<equality_binary_expression_t>, relational_expression_t>;
+using logical_and_expression_t = std::variant<std::shared_ptr<logical_and_binary_expression_t>, equality_expression_t>;
+using logical_or_expression_t = std::variant<std::shared_ptr<logical_or_binary_expression_t>, logical_and_expression_t>;
+using expression_t = logical_or_expression_t;
 
-struct plus_minus_expression_t {
-    plus_minus_t op;
-    expression_t lhs;
-    expression_t rhs;
+
+struct unary_op_expression_t {
+    unary_op_t op;
+    factor_t expr;
 };
-
-struct times_divide_expression_t {
-    times_divide_t op;
-    term_t lhs;
-    term_t rhs;
-};
-
 struct grouping_t { // grouped with `( <expr> )`
     expression_t expr;
 };
 
-struct unop_t {
-    unary_op_t op;
-    factor_t expr;
+
+struct times_divide_binary_expression_t {
+    times_divide_t op;
+    times_divide_expression_t lhs;
+    times_divide_expression_t rhs;
 };
+struct plus_minus_binary_expression_t {
+    plus_minus_t op;
+    plus_minus_expression_t lhs;
+    plus_minus_expression_t rhs;
+};
+struct relational_binary_expression_t {
+    relational_t op;
+    relational_expression_t lhs;
+    relational_expression_t rhs;
+};
+struct equality_binary_expression_t {
+    equality_t op;
+    equality_expression_t lhs;
+    equality_expression_t rhs;
+};
+struct logical_and_binary_expression_t {
+    logical_and_t op;
+    logical_and_expression_t lhs;
+    logical_and_expression_t rhs;
+};
+struct logical_or_binary_expression_t {
+    logical_or_t op;
+    logical_or_expression_t lhs;
+    logical_or_expression_t rhs;
+};
+
 
 struct return_statement_t {
     expression_t return_stmt;
@@ -77,22 +124,24 @@ struct program_t {
 };
 }
 
-inline std::shared_ptr<ast::unop_t> make_unop(const ast::unary_op_t op, ast::factor_t& factor) {
-    return std::make_shared<ast::unop_t>(ast::unop_t { op, std::move(factor) });
-}
-inline std::shared_ptr<ast::grouping_t> make_grouping(ast::expression_t& expression) {
-    return std::make_shared<ast::grouping_t>( ast::grouping_t {std::move(expression)} );
-}
-
 
 void print_constant(const ast::constant_t& constant);
-void print_unary_op(const ast::unary_op_t& op);
+void print_unary_op(const ast::unary_op_expression_t& op);
 void print_grouping(const ast::grouping_t& grouping);
 void print_factor(const ast::factor_t& factor);
-void print_times_divide_expr(const ast::times_divide_expression_t& expr);
-void print_term(const ast::term_t& term);
-void print_plus_minus_expr(const ast::plus_minus_expression_t& expr);
-void print_expr(const ast::expression_t& expr);
+void print_times_divide_binary_expression(const ast::times_divide_binary_expression_t& expr);
+void print_times_divide_expression(const ast::times_divide_expression_t& expr);
+void print_plus_minus_binary_expression(const ast::plus_minus_binary_expression_t& expr);
+void print_plus_minus_expression(const ast::plus_minus_expression_t& expr);
+void print_relational_binary_expression(const ast::relational_binary_expression_t& expr);
+void print_relational_expression(const ast::relational_expression_t& expr);
+void print_equality_binary_expression(const ast::equality_binary_expression_t& expr);
+void print_equality_expression(const ast::equality_expression_t& expr);
+void print_logical_and_binary_expression(const ast::logical_and_binary_expression_t& expr);
+void print_logical_and_expression(const ast::logical_and_expression_t& expr);
+void print_logical_or_binary_expression(const ast::logical_or_binary_expression_t& expr);
+void print_logical_or_expression(const ast::logical_or_expression_t& expr);
+void print_expression(const ast::expression_t& expr);
 void print_return_stmt(const ast::return_statement_t& return_stmt);
 void print_func_decl(const ast::function_declaration_t& func_decl);
 void print_ast(const ast::program_t& program);

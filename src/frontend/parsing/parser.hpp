@@ -5,12 +5,14 @@
 #include <string_view>
 #include <string>
 #include <utility>
+#include <memory>
 
 // debugging:
 #include <cstdio>
 
 #include <frontend/lexing/lexer.hpp>
 #include "ast.hpp"
+#include "parser_utils.hpp"
 #include <utils/common.hpp>
 
 
@@ -71,9 +73,18 @@ struct parser_t {
     }
 };
 
-ast::program_t parse(parser_t& parser);
-ast::function_declaration_t parse_function_decl(parser_t& parser);
-ast::return_statement_t parse_statement(parser_t& parser);
-ast::expression_t parse_expression(parser_t& parser);
-ast::term_t parse_term(parser_t& parser);
+
+ast::constant_t parse_constant(parser_t& parser);
+std::shared_ptr<ast::unary_op_expression_t> parse_unary_expression(parser_t& parser);
+std::shared_ptr<ast::grouping_t> parse_grouping(parser_t& parser);
 ast::factor_t parse_factor(parser_t& parser);
+ast::times_divide_expression_t parse_times_divide_expression(parser_t& parser);
+ast::plus_minus_expression_t parse_plus_minus_expression(parser_t& parser);
+ast::relational_expression_t parse_relational_expression(parser_t& parser);
+ast::equality_expression_t parse_equality_expression(parser_t& parser);
+ast::logical_and_expression_t parse_logical_and_expression(parser_t& parser);
+ast::logical_or_expression_t parse_logical_or_expression(parser_t& parser);
+ast::expression_t parse_expression(parser_t& parser);
+ast::return_statement_t parse_statement(parser_t& parser);
+ast::function_declaration_t parse_function_decl(parser_t& parser);
+ast::program_t parse(parser_t& parser);

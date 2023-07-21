@@ -4,7 +4,7 @@
 #include <io/file_io.hpp>
 #include <frontend/lexing/lexer.hpp>
 #include <frontend/parsing/parser.hpp>
-#include <backend/x86_64/generation.hpp>
+#include <backend/x86_64/traverse_ast.hpp>
 
 
 int main(int argc, char** argv) {

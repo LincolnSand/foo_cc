@@ -166,6 +166,9 @@ token_t scan_token(lexer_t& lexer) {
             return lexer.make_token(token_type_t::TILDE);
         // TODO: disambiguate `!` from `!=`
         case '!':
+            if(lexer.match_char('=')) {
+                return lexer.make_token(token_type_t::NOT_EQUAL);
+            }
             return lexer.make_token(token_type_t::BANG);
         case '+':
             return lexer.make_token(token_type_t::PLUS);
@@ -173,6 +176,31 @@ token_t scan_token(lexer_t& lexer) {
             return lexer.make_token(token_type_t::ASTERISK);
         case '/':
             return lexer.make_token(token_type_t::SLASH);
+        case '&':
+            if(lexer.match_char('&')) {
+                return lexer.make_token(token_type_t::LOGIC_AND);
+            }
+            return lexer.make_token(token_type_t::ERROR);
+        case '|':
+            if(lexer.match_char('|')) {
+                return lexer.make_token(token_type_t::LOGIC_OR);
+            }
+            return lexer.make_token(token_type_t::ERROR);
+        case '<':
+            if(lexer.match_char('=')) {
+                return lexer.make_token(token_type_t::LESS_THAN_EQUAL);
+            }
+            return lexer.make_token(token_type_t::LESS_THAN);
+        case '>':
+            if(lexer.match_char('=')) {
+                return lexer.make_token(token_type_t::GREATER_THAN_EQUAL);
+            }
+            return lexer.make_token(token_type_t::GREATER_THAN);
+        case '=':
+            if(lexer.match_char('=')) {
+                return lexer.make_token(token_type_t::EQUAL_EQUAL);
+            }
+            return lexer.make_token(token_type_t::ERROR);
     }
 
     std::cout << "Unrecognized token: " << c << "\n";
