@@ -161,6 +161,11 @@ token_t scan_token(lexer_t& lexer) {
             return lexer.make_token(token_type_t::SEMICOLON);
         // TODO: disambiguate `-` from `--` and `-=`
         case '-':
+            if(lexer.match_char('=')) {
+                return lexer.make_token(token_type_t::MINUS_EQUALS);
+            } else if(lexer.match_char('-')) {
+                return lexer.make_token(token_type_t::DASH_DASH);
+            }
             return lexer.make_token(token_type_t::DASH);
         case '~':
             return lexer.make_token(token_type_t::TILDE);
@@ -171,36 +176,73 @@ token_t scan_token(lexer_t& lexer) {
             }
             return lexer.make_token(token_type_t::BANG);
         case '+':
+            if(lexer.match_char('=')) {
+                return lexer.make_token(token_type_t::PLUS_EQUALS);
+            } else if(lexer.match_char('+')) {
+                return lexer.make_token(token_type_t::PLUS_PLUS);
+            }
             return lexer.make_token(token_type_t::PLUS);
         case '*':
+            if(lexer.match_char('=')) {
+                return lexer.make_token(token_type_t::TIMES_EQUALS);
+            }
             return lexer.make_token(token_type_t::ASTERISK);
         case '/':
+            if(lexer.match_char('=')) {
+                return lexer.make_token(token_type_t::DIVIDE_EQUALS);
+            }
             return lexer.make_token(token_type_t::SLASH);
         case '&':
             if(lexer.match_char('&')) {
                 return lexer.make_token(token_type_t::LOGIC_AND);
+            } else if(lexer.match_char('=')) {
+                return lexer.make_token(token_type_t::AND_EQUALS);
             }
-            return lexer.make_token(token_type_t::ERROR);
+            return lexer.make_token(token_type_t::BITWISE_AND);
         case '|':
             if(lexer.match_char('|')) {
                 return lexer.make_token(token_type_t::LOGIC_OR);
+            } else if(lexer.match_char('=')) {
+                return lexer.make_token(token_type_t::OR_EQUALS);
             }
-            return lexer.make_token(token_type_t::ERROR);
+            return lexer.make_token(token_type_t::BITWISE_OR);
         case '<':
             if(lexer.match_char('=')) {
                 return lexer.make_token(token_type_t::LESS_THAN_EQUAL);
+            } else if(lexer.match_char('<')) {
+                if(lexer.match_char('=')) {
+                    return lexer.make_token(token_type_t::LEFT_SHIFT_EQUALS);
+                }
+                return lexer.make_token(token_type_t::BITWISE_LEFT_SHIFT);
             }
             return lexer.make_token(token_type_t::LESS_THAN);
         case '>':
             if(lexer.match_char('=')) {
                 return lexer.make_token(token_type_t::GREATER_THAN_EQUAL);
+            } else if(lexer.match_char('>')) {
+                if(lexer.match_char('=')) {
+                    return lexer.make_token(token_type_t::RIGHT_SHIFT_EQUALS);
+                }
+                return lexer.make_token(token_type_t::BITWISE_RIGHT_SHIFT);
             }
             return lexer.make_token(token_type_t::GREATER_THAN);
         case '=':
             if(lexer.match_char('=')) {
                 return lexer.make_token(token_type_t::EQUAL_EQUAL);
             }
-            return lexer.make_token(token_type_t::ERROR);
+            return lexer.make_token(token_type_t::EQUALS);
+        case '%':
+            if(lexer.match_char('=')) {
+                return lexer.make_token(token_type_t::MODULO_EQUALS);
+            }
+            return lexer.make_token(token_type_t::MODULO);
+        case '^':
+            if(lexer.match_char('=')) {
+                return lexer.make_token(token_type_t::XOR_EQUALS);
+            }
+            return lexer.make_token(token_type_t::BITWISE_XOR);
+        case ',':
+            return lexer.make_token(token_type_t::COMMA);
     }
 
     std::cout << "Unrecognized token: " << c << "\n";

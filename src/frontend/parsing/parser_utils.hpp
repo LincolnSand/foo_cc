@@ -7,10 +7,14 @@
 
 #include <frontend/lexing/lexer.hpp>
 #include "ast.hpp"
+#include <utils/common.hpp>
 
 
 bool is_unary_operator(token_t token);
 bool is_constant(token_t token);
+bool is_var_name(token_t token);
+
+ast::var_name_t validate_lvalue_expression_exp(const ast::expression_t& expr);
 
 ast::unary_op_t convert_to_unary_token(token_t token);
 ast::times_divide_t convert_to_times_divide_token(token_t token);
@@ -28,3 +32,6 @@ std::shared_ptr<ast::relational_binary_expression_t> make_relational_binary_expr
 std::shared_ptr<ast::equality_binary_expression_t> make_equality_binary_expression(ast::equality_expression_t first_param, ast::equality_t op, ast::equality_expression_t second_param);
 std::shared_ptr<ast::logical_and_binary_expression_t> make_logical_and_binary_expression(ast::logical_and_expression_t first_param, ast::logical_and_t op, ast::logical_and_expression_t second_param);
 std::shared_ptr<ast::logical_or_binary_expression_t> make_logical_or_binary_expression(ast::logical_or_expression_t first_param, ast::logical_or_t op, ast::logical_or_expression_t second_param);
+std::shared_ptr<ast::assignment_t> make_assignment_expression(ast::expression_t first_param, ast::expression_t second_param);
+
+ast::expression_t make_constant_expr(int value);

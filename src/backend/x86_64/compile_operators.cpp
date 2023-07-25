@@ -10,8 +10,31 @@ void store_constant(assembly_output_t& assembly_output, const ast::constant_t& c
 void store_register(assembly_output_t& assembly_output, const std::string& register_name) {
     assembly_output.output += "pushq %" + register_name + "\n";
 }
+void store_variable(assembly_output_t& assembly_output, const ast::var_name_t variable_name, const std::string& register_name) {
+    const auto offset = assembly_output.variable_lookup.find_from_lowest_scope(variable_name);
+    if(!offset.has_value()) {
+        throw std::runtime_error("Variable " + variable_name + " not declared in current scope.");
+    }
+
+    assembly_output.output += "movq %" + register_name + ", -" + std::to_string(*offset) + "(%rbp)\n";
+
+    // assignments are expressions in C, so we push the new value of the variable onto the stack
+    assembly_output.output += "pushq %" + register_name + "\n";
+}
 void pop_constant(assembly_output_t& assembly_output, const std::string& register_name) {
     assembly_output.output += "popq %" + register_name + "\n";
+}
+void pop_variable(assembly_output_t& assembly_output, const ast::var_name_t variable_name, const std::string& register_name) {
+    const auto offset = assembly_output.variable_lookup.find_from_lowest_scope(variable_name);
+    if(!offset.has_value()) {
+        throw std::runtime_error("Variable " + variable_name + " not declared in current scope.");
+    }
+
+    assembly_output.output += "movq -" + std::to_string(*offset) + "(%rbp), %" + register_name + "\n";
+}
+
+void allocate_stack_space_for_variable(assembly_output_t& assembly_output) {
+    assembly_output.output += "sub $8, %rsp\n"; // TODO: we only support 64 bit integers currently
 }
 
 void generate_negation(assembly_output_t& assembly_output) {
@@ -105,45 +128,12 @@ void generate_not_equals(assembly_output_t& assembly_output) {
     store_register(assembly_output, "rax");
 }
 
-void generate_logical_and(assembly_output_t& assembly_output) {
-    pop_constant(assembly_output, "rcx");
-    pop_constant(assembly_output, "rax");
-
-    assembly_output.output += "cmpq $0, %rax\n";
-    std::string clause_2_label_name = "_clause2_" + std::to_string(assembly_output.current_label_number++);
-    std::string end_label_name = "_end_" + std::to_string(assembly_output.current_label_number++);
-    assembly_output.output += "jne " + clause_2_label_name + "\n";
-
-    // short circuit on false
-    assembly_output.output += "movq $1, %rax\n";
-    assembly_output.output += "jmp " + end_label_name + "\n";
-
-    assembly_output.output += clause_2_label_name + ":\n";
-    assembly_output.output += "cmpq $0, %rcx\n";
-    assembly_output.output += "movq $0, %rax\n";
-    assembly_output.output += "setne %al\n";
-    assembly_output.output += end_label_name + ":\n";
-
-    store_register(assembly_output, "rax");
+void generate_function_epilogue(assembly_output_t& assembly_output) {
+    assembly_output.output += "movq %rbp, %rsp\n";
+    assembly_output.output += "popq %rbp\n";
+    assembly_output.output += "ret\n";
 }
-void generate_logical_or(assembly_output_t& assembly_output) {
-    pop_constant(assembly_output, "rcx");
-    pop_constant(assembly_output, "rax");
-
-    assembly_output.output += "cmpq $0, %rax\n";
-    std::string clause_2_label_name = "_clause2_" + std::to_string(assembly_output.current_label_number++);
-    std::string end_label_name = "_end_" + std::to_string(assembly_output.current_label_number++);
-    assembly_output.output += "je " + clause_2_label_name + "\n";
-
-    // short circuit on true
-    assembly_output.output += "movq $1, %rax\n";
-    assembly_output.output += "jmp " + end_label_name + "\n";
-
-    assembly_output.output += clause_2_label_name + ":\n";
-    assembly_output.output += "cmpq $0, %rcx\n";
-    assembly_output.output += "movq $0, %rax\n";
-    assembly_output.output += "setne %al\n";
-    assembly_output.output += end_label_name + ":\n";
-
-    store_register(assembly_output, "rax");
+void generate_function_prologue(assembly_output_t& assembly_output) {
+    assembly_output.output += "pushq %rbp\n";
+    assembly_output.output += "movq %rsp, %rbp\n";
 }

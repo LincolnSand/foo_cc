@@ -1,6 +1,11 @@
 #include "ast.hpp"
 
 
+void print_variable_name(const ast::var_name_t& var_name) {
+    std::cout << "(variable_name: ";
+    std::cout << var_name;
+    std::cout << ')';
+}
 void print_constant(const ast::constant_t& constant) {
     std::cout << "(constant: " << constant.value << ')';
 }
@@ -24,6 +29,9 @@ void print_factor(const ast::factor_t& factor) {
         },
         [](const ast::constant_t& constant) {
             print_constant(constant);
+        },
+        [](const ast::var_name_t& var_name) {
+            print_variable_name(var_name);
         }
     }, factor);
 }
@@ -123,17 +131,55 @@ void print_logical_or_expression(const ast::logical_or_expression_t& expr) {
         }
     }, expr);
 }
+void print_assignment(const ast::assignment_t& assignment) {
+    std::cout << "(assignment: ";
+    std::cout << assignment.var_name;
+    std::cout << " = ";
+    print_expression(assignment.expr);
+    std::cout << ')';
+}
 void print_expression(const ast::expression_t& expr) {
-    print_logical_or_expression(expr);
+    std::visit(overloaded{
+        [](const std::shared_ptr<ast::assignment_t>& expr) {
+            print_assignment(*expr);
+        },
+        [](const ast::logical_or_expression_t& expr) {
+            print_logical_or_expression(expr);
+        }
+    }, expr);
+}
+void print_declaration(const ast::declaration_t& declaration) {
+    std::cout << "(declaration: ";
+    std::cout << declaration.var_name;
+    if(declaration.value.has_value()) {
+        std::cout << " = ";
+        print_expression(declaration.value.value());
+    }
+    std::cout << ')';
 }
 void print_return_stmt(const ast::return_statement_t& return_stmt) {
     std::cout << "(return: ";
-    print_expression(return_stmt.return_stmt);
+    print_expression(return_stmt.expr);
     std::cout << ')';
 }
+void print_stmt(const ast::statement_t& stmt) {
+    std::visit(overloaded{
+        [](const ast::return_statement_t& stmt) {
+            print_return_stmt(stmt);
+        },
+        [](const ast::declaration_t& stmt) {
+            print_declaration(stmt);
+        },
+        [](const ast::expression_t& stmt) {
+            print_expression(stmt);
+        }
+    }, stmt);
+}
 void print_func_decl(const ast::function_declaration_t& func_decl) {
-    std::cout << "(" << func_decl.name << ": ";
-    print_return_stmt(func_decl.statement);
+    std::cout << "(" << func_decl.func_name << ": ";
+    for(const auto& stmt : func_decl.statements) {
+        print_stmt(stmt);
+    }
     std::cout << ')';
 }
 void print_ast(const ast::program_t& program) {

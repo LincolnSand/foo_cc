@@ -1,19 +1,13 @@
 #include "parser.hpp"
 
 
-std::shared_ptr<ast::grouping_t> parse_grouping(parser_t& parser) {
-    parser.advance_token();
-    auto exp = parse_expression(parser);
-    if(parser.peek_token().token_type != token_type_t::RIGHT_PAREN) {
-        throw std::runtime_error("expected `)`");
+ast::var_name_t parse_var_name(parser_t& parser) {
+    auto identifier_token = parser.advance_token();
+    if(identifier_token.token_type != token_type_t::IDENTIFIER) {
+        throw std::runtime_error("invalid identifier: [" + std::to_string(static_cast<std::uint32_t>(parser.peek_token().token_type)) + std::string("]"));
     }
-    parser.advance_token();
-    return make_grouping(exp);
-}
-std::shared_ptr<ast::unary_op_expression_t> parse_unary_expression(parser_t& parser) {
-    auto op = convert_to_unary_token(parser.advance_token());
-    auto factor = parse_factor(parser);
-    return make_unary_expression(op, factor);
+
+    return ast::var_name_t { identifier_token.token_text };
 }
 ast::constant_t parse_constant(parser_t& parser) {
     auto next = parser.advance_token();
@@ -25,6 +19,20 @@ ast::constant_t parse_constant(parser_t& parser) {
     utils::str_to_int(next.token_text, result);
     return ast::constant_t { result };
 }
+std::shared_ptr<ast::unary_op_expression_t> parse_unary_expression(parser_t& parser) {
+    auto op = convert_to_unary_token(parser.advance_token());
+    auto factor = parse_factor(parser);
+    return make_unary_expression(op, factor);
+}
+std::shared_ptr<ast::grouping_t> parse_grouping(parser_t& parser) {
+    parser.advance_token();
+    auto exp = parse_expression(parser);
+    if(parser.peek_token().token_type != token_type_t::RIGHT_PAREN) {
+        throw std::runtime_error("expected `)`");
+    }
+    parser.advance_token();
+    return make_grouping(exp);
+}
 ast::factor_t parse_factor(parser_t& parser) {
     auto next = parser.peek_token();
     if(next.token_type == token_type_t::LEFT_PAREN) {
@@ -33,6 +41,8 @@ ast::factor_t parse_factor(parser_t& parser) {
         return parse_unary_expression(parser);
     } else if(is_constant(next)) {
         return parse_constant(parser);
+    } else if(is_var_name(next)) {
+        return parse_var_name(parser);
     } else {
         throw std::runtime_error("invalid factor");
     }
@@ -92,9 +102,32 @@ ast::logical_or_expression_t parse_logical_or_expression(parser_t& parser) {
     return first_param;
 }
 ast::expression_t parse_expression(parser_t& parser) {
-    return parse_logical_or_expression(parser);
+    ast::expression_t first_param = parse_logical_or_expression(parser);
+    if(parser.peek_token().token_type == token_type_t::EQUALS) {
+        parser.advance_token(); // consume `=` token
+        return make_assignment_expression(first_param, parse_expression(parser)); // `make_assignment_expression()` validates that `first_param` is a valid lvalue
+    }
+    return first_param;
 }
-ast::return_statement_t parse_statement(parser_t& parser) {
+ast::declaration_t parse_declaration(parser_t& parser) {
+    if(parser.advance_token().token_type != token_type_t::INT_KEYWORD) {
+        throw std::runtime_error("expected `int` keyword");
+    }
+
+    auto identifier_token = parser.advance_token();
+    if(identifier_token.token_type != token_type_t::IDENTIFIER) {
+        throw std::runtime_error("expected identifier");
+    }
+
+    if(parser.peek_token().token_type != token_type_t::EQUALS) {
+        return ast::declaration_t{ast::var_name_t(identifier_token.token_text), std::nullopt};
+    }
+
+    parser.advance_token(); // consume `=` token
+
+    return ast::declaration_t{ast::var_name_t(identifier_token.token_text), parse_expression(parser)};
+}
+ast::return_statement_t parse_return_statement(parser_t& parser) {
     const auto keyword_token = parser.advance_token();
     if(keyword_token.token_type != token_type_t::RETURN_KEYWORD) {
         throw std::runtime_error("expected `return` keyword in statement");
@@ -102,13 +135,31 @@ ast::return_statement_t parse_statement(parser_t& parser) {
 
     auto expression = parse_expression(parser);
 
+    return ast::return_statement_t{std::move(expression)};
+}
+static ast::statement_t parse_statement_helper(parser_t& parser) {
+    if(parser.peek_token().token_type == token_type_t::RETURN_KEYWORD) {
+        return parse_return_statement(parser);
+    } else if(parser.peek_token().token_type == token_type_t::INT_KEYWORD) {
+        return parse_declaration(parser);
+    }
+    return parse_expression(parser);
+}
+ast::statement_t parse_statement(parser_t& parser) {
+    if(parser.is_eof()) {
+        throw std::runtime_error("unexpected end of file");
+    }
+
+    ast::statement_t statement = parse_statement_helper(parser);
+
     const auto semicolon_token = parser.advance_token();
     if(semicolon_token.token_type != token_type_t::SEMICOLON) {
         throw std::runtime_error("expected `;` in statement");
     }
 
-    return ast::return_statement_t{std::move(expression)};
+    return statement;
 }
+// TODO: generate `return 0;` if no return statement in `main`
 ast::function_declaration_t parse_function_decl(parser_t& parser) {
     const auto keyword_token = parser.advance_token();
     if(keyword_token.token_type != token_type_t::INT_KEYWORD) {
@@ -136,14 +187,24 @@ ast::function_declaration_t parse_function_decl(parser_t& parser) {
         throw std::runtime_error("expected `{` in function declaration");
     }
 
-    auto statement = parse_statement(parser);
+    std::vector<ast::statement_t> statements;
+
+    while(!parser.is_eof() && parser.peek_token().token_type != token_type_t::RIGHT_CURLY) {
+        statements.push_back(parse_statement(parser));
+    }
+
+    // TODO: check if the function identifier is `main` first for when we add support for other functions
+    constexpr std::size_t RETURN_INDEX = 0;
+    if(statements.size() == 0 || statements.at(statements.size() - 1).index() != RETURN_INDEX) {
+        statements.push_back(ast::return_statement_t { make_constant_expr(0) } );
+    }
 
     curly_token = parser.advance_token();
     if(curly_token.token_type != token_type_t::RIGHT_CURLY) {
         throw std::runtime_error("expected `}` in function declaration");
     }
 
-    return ast::function_declaration_t{ std::string(name_token.token_text), std::move(statement) };
+    return ast::function_declaration_t{ std::string(name_token.token_text), std::move(statements) };
 }
 ast::program_t parse(parser_t& parser) {
     return ast::program_t { parse_function_decl(parser) };

@@ -13,6 +13,133 @@ bool is_unary_operator(token_t token) {
 bool is_constant(token_t token) {
     return token.token_type == token_type_t::INT_CONSTANT;
 }
+bool is_var_name(token_t token) {
+    return token.token_type == token_type_t::IDENTIFIER;
+}
+
+
+
+
+
+
+
+
+
+
+ast::var_name_t validate_lvalue_expression_factor(const ast::factor_t& factor) {
+    return std::visit(overloaded{
+        [](const std::shared_ptr<ast::grouping_t>& factor) -> ast::var_name_t {
+            return validate_lvalue_expression_exp(factor->expr);
+        },
+        [](const std::shared_ptr<ast::unary_op_expression_t>& factor) -> ast::var_name_t {
+            throw std::runtime_error("Unary operator forms an invalid lvalue.");
+            return "";
+        },
+        [](const ast::constant_t& factor) -> ast::var_name_t {
+            throw std::runtime_error("Constant forms an invalid lvalue.");
+            return "";
+        },
+        [](const ast::var_name_t& factor) -> ast::var_name_t {
+            return factor;
+        }
+    }, factor);
+}
+
+ast::var_name_t validate_lvalue_expression_times_divide(const ast::times_divide_expression_t& expr) {
+    return std::visit(overloaded{
+        [](const std::shared_ptr<ast::times_divide_binary_expression_t>& expr) -> ast::var_name_t {
+            throw std::runtime_error("Times divide binary expression forms an invalid lvalue.");
+            return "";
+        },
+        [](const ast::factor_t& expr) -> ast::var_name_t {
+            return validate_lvalue_expression_factor(expr);
+        }
+    }, expr);
+}
+
+ast::var_name_t validate_lvalue_expression_plus_minus(const ast::plus_minus_expression_t& expr) {
+    return std::visit(overloaded{
+        [](const std::shared_ptr<ast::plus_minus_binary_expression_t>& expr) -> ast::var_name_t {
+            throw std::runtime_error("Plus minus binary expression forms an invalid lvalue.");
+            return "";
+        },
+        [](const ast::times_divide_expression_t& expr) -> ast::var_name_t {
+            return validate_lvalue_expression_times_divide(expr);
+        }
+    }, expr);
+}
+
+ast::var_name_t validate_lvalue_expression_relational_exp(const ast::relational_expression_t& expr) {
+    return std::visit(overloaded{
+        [](const std::shared_ptr<ast::relational_binary_expression_t>& expr) -> ast::var_name_t {
+            throw std::runtime_error("Relational binary expression forms an invalid lvalue.");
+            return "";
+        },
+        [](const ast::plus_minus_expression_t& expr) -> ast::var_name_t {
+            return validate_lvalue_expression_plus_minus(expr);
+        }
+    }, expr);
+}
+
+ast::var_name_t validate_lvalue_expression_equality(const ast::equality_expression_t& expr) {
+    return std::visit(overloaded{
+        [](const std::shared_ptr<ast::equality_binary_expression_t>& expr) -> ast::var_name_t {
+            throw std::runtime_error("Equality binary expression forms an invalid lvalue.");
+            return "";
+        },
+        [](const ast::relational_expression_t& expr) -> ast::var_name_t {
+            return validate_lvalue_expression_relational_exp(expr);
+        }
+    }, expr);
+}
+
+ast::var_name_t validate_lvalue_expression_logic_and(const ast::logical_and_expression_t& expr) {
+    return std::visit(overloaded{
+        [](const std::shared_ptr<ast::logical_and_binary_expression_t>& expr) -> ast::var_name_t {
+            throw std::runtime_error("Logical and binary expression forms an invalid lvalue.");
+            return "";
+        },
+        [](const ast::equality_expression_t& expr) -> ast::var_name_t {
+            return validate_lvalue_expression_equality(expr);
+        }
+    }, expr);
+}
+
+ast::var_name_t validate_lvalue_expression_logic_or(const ast::logical_or_expression_t& expr) {
+    return std::visit(overloaded{
+        [](const std::shared_ptr<ast::logical_or_binary_expression_t>& expr) -> ast::var_name_t {
+            throw std::runtime_error("Logical or binary expression forms an invalid lvalue.");
+            return "";
+        },
+        [](const ast::logical_and_expression_t& expr) -> ast::var_name_t {
+            return validate_lvalue_expression_logic_and(expr);
+        }
+    }, expr);
+}
+
+ast::var_name_t validate_lvalue_expression_assignment(const ast::assignment_t& assignment) {
+    return assignment.var_name;
+}
+
+ast::var_name_t validate_lvalue_expression_exp(const ast::expression_t& expr) {
+    return std::visit(overloaded{
+        [](const std::shared_ptr<ast::assignment_t>& assignment) -> ast::var_name_t {
+            return validate_lvalue_expression_assignment(*assignment);
+        },
+        [](const ast::logical_or_expression_t& expr) -> ast::var_name_t {
+            return validate_lvalue_expression_logic_or(expr);
+        }
+    }, expr);
+}
+
+
+
+
+
+
+
+
+
 
 ast::unary_op_t convert_to_unary_token(token_t token) {
     switch(token.token_type) {
@@ -101,4 +228,30 @@ std::shared_ptr<ast::logical_and_binary_expression_t> make_logical_and_binary_ex
 }
 std::shared_ptr<ast::logical_or_binary_expression_t> make_logical_or_binary_expression(ast::logical_or_expression_t first_param, ast::logical_or_t op, ast::logical_or_expression_t second_param) {
     return std::make_shared<ast::logical_or_binary_expression_t>( ast::logical_or_binary_expression_t { op, std::move(first_param), std::move(second_param) } );
+}
+std::shared_ptr<ast::assignment_t> make_assignment_expression(ast::expression_t first_param, ast::expression_t second_param) {
+    // TODO: validate that `first_param` is a valid lvalue expression
+    return std::make_shared<ast::assignment_t>( ast::assignment_t { validate_lvalue_expression_exp(first_param), std::move(second_param) } );
+}
+
+ast::expression_t make_constant_expr(const int value) {
+    return ast::expression_t {
+        ast::logical_or_expression_t {
+            ast::logical_and_expression_t {
+                ast::equality_expression_t {
+                    ast::relational_expression_t {
+                        ast::plus_minus_expression_t {
+                            ast::times_divide_expression_t {
+                                ast::factor_t {
+                                    ast::constant_t {
+                                        value
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
 }

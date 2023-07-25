@@ -28,6 +28,10 @@ void generate_factor(assembly_output_t& assembly_output, const ast::factor_t& fa
         },
         [&assembly_output](const ast::constant_t& constant) {
             store_constant(assembly_output, constant);
+        },
+        [&assembly_output](const ast::var_name_t& var_name) {
+            pop_variable(assembly_output, var_name, "rax");
+            store_register(assembly_output, "rax");
         }
     }, factor);
 }
@@ -127,8 +131,29 @@ void generate_equality_expression(assembly_output_t& assembly_output, const ast:
 }
 void generate_logical_and_binary_expression(assembly_output_t& assembly_output, const ast::logical_and_binary_expression_t& expr) {
     generate_logical_and_expression(assembly_output, expr.lhs);
+
+    pop_constant(assembly_output, "rax");
+
+    assembly_output.output += "cmpq $0, %rax\n";
+    std::string clause_2_label_name = "_clause2_" + std::to_string(assembly_output.current_label_number++);
+    std::string end_label_name = "_end_" + std::to_string(assembly_output.current_label_number++);
+    assembly_output.output += "jne " + clause_2_label_name + "\n";
+
+    // short circuit on false
+    assembly_output.output += "movq $1, %rax\n";
+    assembly_output.output += "jmp " + end_label_name + "\n";
+
+    assembly_output.output += clause_2_label_name + ":\n";
+
     generate_logical_and_expression(assembly_output, expr.rhs);
-    generate_logical_and(assembly_output);
+    pop_constant(assembly_output, "rax");
+
+    assembly_output.output += "cmpq $0, %rax\n";
+    assembly_output.output += "movq $0, %rax\n";
+    assembly_output.output += "setne %al\n";
+    assembly_output.output += end_label_name + ":\n";
+
+    store_register(assembly_output, "rax");
 }
 void generate_logical_and_expression(assembly_output_t& assembly_output, const ast::logical_and_expression_t& expr) {
     std::visit(overloaded{
@@ -142,8 +167,29 @@ void generate_logical_and_expression(assembly_output_t& assembly_output, const a
 }
 void generate_logical_or_binary_expression(assembly_output_t& assembly_output, const ast::logical_or_binary_expression_t& expr) {
     generate_logical_or_expression(assembly_output, expr.lhs);
+
+    pop_constant(assembly_output, "rax");
+
+    assembly_output.output += "cmpq $0, %rax\n";
+    std::string clause_2_label_name = "_clause2_" + std::to_string(assembly_output.current_label_number++);
+    std::string end_label_name = "_end_" + std::to_string(assembly_output.current_label_number++);
+    assembly_output.output += "je " + clause_2_label_name + "\n";
+
+    // short circuit on true
+    assembly_output.output += "movq $1, %rax\n";
+    assembly_output.output += "jmp " + end_label_name + "\n";
+
+    assembly_output.output += clause_2_label_name + ":\n";
+
     generate_logical_or_expression(assembly_output, expr.rhs);
-    generate_logical_or(assembly_output);
+    pop_constant(assembly_output, "rax");
+
+    assembly_output.output += "cmpq $0, %rax\n";
+    assembly_output.output += "movq $0, %rax\n";
+    assembly_output.output += "setne %al\n";
+    assembly_output.output += end_label_name + ":\n";
+
+    store_register(assembly_output, "rax");
 }
 void generate_logical_or_expression(assembly_output_t& assembly_output, const ast::logical_or_expression_t& expr) {
     std::visit(overloaded{
@@ -155,24 +201,79 @@ void generate_logical_or_expression(assembly_output_t& assembly_output, const as
         }
     }, expr);
 }
+void generate_assignment(assembly_output_t& assembly_output, const ast::assignment_t& assignment) {
+    if(!assembly_output.variable_lookup.contains_in_accessible_scopes(assignment.var_name)) {
+        throw std::runtime_error("Variable " + assignment.var_name + " not declared in currently accessible scopes.");
+    }
+
+    generate_expression(assembly_output, assignment.expr);
+
+    pop_constant(assembly_output, "rax");
+    store_variable(assembly_output, assignment.var_name, "rax");
+}
 void generate_expression(assembly_output_t& assembly_output, const ast::expression_t& expression) {
-    generate_logical_or_expression(assembly_output, expression);
+    std::visit(overloaded{
+        [&assembly_output](const std::shared_ptr<ast::assignment_t> expr) {
+            generate_assignment(assembly_output, *expr);
+        },
+        [&assembly_output](const ast::logical_or_expression_t& expr) {
+            generate_logical_or_expression(assembly_output, expr);
+        }
+    }, expression);
+}
+void generate_decl(assembly_output_t& assembly_output, const ast::declaration_t& decl) {
+    if(assembly_output.variable_lookup.contains_in_lowest_scope(decl.var_name)) {
+        throw std::runtime_error("Variable " + decl.var_name + " already declared in current scope.");
+    }
+
+    // start off at `8` instead of `0` since we read from low to high memory address and we negate the offset from ebp in the emited code, so the first byte is `-8` and the range is [-8, 0) instead of [0, -8).
+    assembly_output.variable_lookup.add_new_variable_in_current_scope(decl.var_name, (assembly_output.current_ebp_offset += 8));
+
+    allocate_stack_space_for_variable(assembly_output);
+
+    if(decl.value.has_value()) {
+        generate_expression(assembly_output, *decl.value);
+
+        pop_constant(assembly_output, "rax");
+        store_variable(assembly_output, decl.var_name, "rax");
+    }
 }
 void generate_return_stmt(assembly_output_t& assembly_output, const ast::return_statement_t& return_stmt) {
-    generate_expression(assembly_output, return_stmt.return_stmt);
+    generate_expression(assembly_output, return_stmt.expr);
 
     pop_constant(assembly_output, "rax");
 
-    assembly_output.output += "ret\n";
+    generate_function_epilogue(assembly_output);
+}
+void generate_stmt(assembly_output_t& assembly_output, const ast::statement_t& stmt) {
+    std::visit(overloaded{
+        [&assembly_output](const ast::return_statement_t& stmt) {
+            generate_return_stmt(assembly_output, stmt);
+        },
+        [&assembly_output](const ast::declaration_t& stmt) {
+            generate_decl(assembly_output, stmt);
+        },
+        [&assembly_output](const ast::expression_t& stmt) {
+            generate_expression(assembly_output, stmt);
+        }
+    }, stmt);
 }
 void generate_func_decl(assembly_output_t& assembly_output, const ast::function_declaration_t& function) {
+    assembly_output.variable_lookup.create_new_scope();
+
     assembly_output.output += ".globl ";
-    assembly_output.output += function.name;
+    assembly_output.output += function.func_name;
     assembly_output.output += "\n";
-    assembly_output.output += function.name;
+    assembly_output.output += function.func_name;
     assembly_output.output += ":\n";
 
-    generate_return_stmt(assembly_output, function.statement);
+    generate_function_prologue(assembly_output);
+
+    for(const auto& stmt : function.statements) {
+        generate_stmt(assembly_output, stmt);
+    }
+
+    assembly_output.variable_lookup.destroy_current_scope();
 }
 void generate_program(assembly_output_t& assembly_output, const ast::program_t& program) {
     generate_func_decl(assembly_output, program.function_declaration);
