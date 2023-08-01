@@ -8,14 +8,12 @@ token_type_t handle_number(lexer_t& lexer) {
     }
     return token_type_t::INT_CONSTANT;
 }
-
 token_type_t handle_identifier(lexer_t& lexer) {
     while(utils::is_alpha_num(lexer.peek_char())) {
         lexer.advance_char();
     }
     return handle_keywords(lexer);
 }
-
 
 static token_type_t match_keyword(const lexer_t& lexer, std::uint32_t start_index, std::string_view expected, const token_type_t expected_type) {
     if(lexer.current_token_str_len() == (start_index + expected.length())
@@ -40,7 +38,6 @@ token_type_t handle_keywords(lexer_t& lexer) {
 
     return token_type_t::IDENTIFIER;
 }
-
 void handle_whitespace(lexer_t& lexer) {
     for(;;) {
         switch(lexer.peek_char()) {
@@ -57,7 +54,6 @@ void handle_whitespace(lexer_t& lexer) {
         }
     }
 }
-
 
 // this function assumes the opening (/*) of the comment has already been consumed. This consumes the comment text itself and the closing of it
 static void handle_multiline_comment(lexer_t& lexer) {
@@ -80,7 +76,6 @@ static void handle_multiline_comment(lexer_t& lexer) {
         // otherwise, we ran into `*`, but not a following `/` and still have text to go, so the comment hasn't ended yet, so keep going
     }
 }
-
 // this function assumes the opening (//) of the comment has already been consumed. This consumes the comment text itself and the closing of it
 static void handle_single_line_comment(lexer_t& lexer) {
     while(lexer.peek_char() != '\n' && !lexer.is_eof()) {
@@ -93,7 +88,6 @@ static void handle_single_line_comment(lexer_t& lexer) {
     lexer.advance_char();
     lexer.incr_line_number();
 }
-
 // TODO: clean up this function
 bool handle_comment(lexer_t& lexer) {
     for(;;) {
@@ -117,7 +111,6 @@ bool handle_comment(lexer_t& lexer) {
         }
     }
 }
-
 
 token_t scan_token(lexer_t& lexer) {
     lexer.start = lexer.current; // restart token string for next token
@@ -248,7 +241,6 @@ token_t scan_token(lexer_t& lexer) {
     std::cout << "Unrecognized token: " << c << "\n";
     return lexer.make_token(token_type_t::ERROR);
 }
-
 std::vector<token_t> scan_all_tokens(lexer_t& lexer) {
     std::vector<token_t> tokens;
     for(;;) {

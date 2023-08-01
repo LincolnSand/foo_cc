@@ -9,8 +9,8 @@ void print_variable_name(const ast::var_name_t& var_name) {
 void print_constant(const ast::constant_t& constant) {
     std::cout << "(constant: " << constant.value << ')';
 }
-void print_unary_op(const ast::unary_op_expression_t& op) {
-    std::cout << "(unary_op: [" << static_cast<std::uint16_t>(op.op) << "]: ";
+void print_highest_precedence_unary_expression(const ast::highest_precedence_unary_expression_t& op) {
+    std::cout << "(highest_precedence_unary_op: [" << static_cast<std::uint16_t>(op.op) << "]: ";
     print_factor(op.expr);
     std::cout << ')';
 }
@@ -24,8 +24,8 @@ void print_factor(const ast::factor_t& factor) {
         [](const std::shared_ptr<ast::grouping_t>& grouping) {
             print_grouping(*grouping);
         },
-        [](const std::shared_ptr<ast::unary_op_expression_t>& op) {
-            print_unary_op(*op);
+        [](const std::shared_ptr<ast::highest_precedence_unary_expression_t>& op) {
+            print_highest_precedence_unary_expression(*op);
         },
         [](const ast::constant_t& constant) {
             print_constant(constant);
@@ -34,6 +34,21 @@ void print_factor(const ast::factor_t& factor) {
             print_variable_name(var_name);
         }
     }, factor);
+}
+void print_unary_op_expression(const ast::unary_op_expression_t& op) {
+    std::cout << "(unary_op: [" << static_cast<std::uint16_t>(op.op) << "]: ";
+    print_unary_expression(op.expr);
+    std::cout << ')';
+}
+void print_unary_expression(const ast::unary_expression_t& expr) {
+    std::visit(overloaded{
+        [](const std::shared_ptr<ast::unary_op_expression_t>& op) {
+            print_unary_op_expression(*op);
+        },
+        [](const ast::factor_t& factor) {
+            print_factor(factor);
+        }
+    }, expr);
 }
 void print_times_divide_binary_expression(const ast::times_divide_binary_expression_t& expr) {
     std::cout << "(times_divide [" << static_cast<std::uint16_t>(expr.op) << "]: ";
@@ -46,8 +61,8 @@ void print_times_divide_expression(const ast::times_divide_expression_t& expr) {
         [](const std::shared_ptr<ast::times_divide_binary_expression_t>& expr) {
             print_times_divide_binary_expression(*expr);
         },
-        [](const ast::factor_t& factor) {
-            print_factor(factor);
+        [](const ast::unary_expression_t& expr) {
+            print_unary_expression(expr);
         }
     }, expr);
 }
@@ -67,6 +82,22 @@ void print_plus_minus_expression(const ast::plus_minus_expression_t& expr) {
         }
     }, expr);
 }
+void print_bitshift_binary_expression(const ast::bitshift_binary_expression_t& expr) {
+    std::cout << "(bitshift [" << static_cast<std::uint16_t>(expr.op) << "]: ";
+    print_bitshift_expression(expr.lhs);
+    print_bitshift_expression(expr.rhs);
+    std::cout << ')';
+}
+void print_bitshift_expression(const ast::bitshift_expression_t& expr) {
+    std::visit(overloaded{
+        [](const std::shared_ptr<ast::bitshift_binary_expression_t>& expr) {
+            print_bitshift_binary_expression(*expr);
+        },
+        [](const ast::plus_minus_expression_t& expr) {
+            print_plus_minus_expression(expr);
+        }
+    }, expr);
+}
 void print_relational_binary_expression(const ast::relational_binary_expression_t& expr) {
     std::cout << "(relational [" << static_cast<std::uint16_t>(expr.op) << "]: ";
     print_relational_expression(expr.lhs);
@@ -78,8 +109,8 @@ void print_relational_expression(const ast::relational_expression_t& expr) {
         [](const std::shared_ptr<ast::relational_binary_expression_t>& expr) {
             print_relational_binary_expression(*expr);
         },
-        [](const ast::plus_minus_expression_t& expr) {
-            print_plus_minus_expression(expr);
+        [](const ast::bitshift_expression_t& expr) {
+            print_bitshift_expression(expr);
         }
     }, expr);
 }
@@ -99,8 +130,56 @@ void print_equality_expression(const ast::equality_expression_t& expr) {
         }
     }, expr);
 }
+void print_bitwise_and_binary_expression(const ast::bitwise_and_binary_expression_t& expr) {
+    std::cout << "(bitwise_and: ";
+    print_bitwise_and_expression(expr.lhs);
+    print_bitwise_and_expression(expr.rhs);
+    std::cout << ')';
+}
+void print_bitwise_and_expression(const ast::bitwise_and_expression_t& expr) {
+    std::visit(overloaded{
+        [](const std::shared_ptr<ast::bitwise_and_binary_expression_t>& expr) {
+            print_bitwise_and_binary_expression(*expr);
+        },
+        [](const ast::equality_expression_t& expr) {
+            print_equality_expression(expr);
+        }
+    }, expr);
+}
+void print_bitwise_xor_binary_expression(const ast::bitwise_xor_binary_expression_t& expr) {
+    std::cout << "(bitwise_xor: ";
+    print_bitwise_xor_expression(expr.lhs);
+    print_bitwise_xor_expression(expr.rhs);
+    std::cout << ')';
+}
+void print_bitwise_xor_expression(const ast::bitwise_xor_expression_t& expr) {
+    std::visit(overloaded{
+        [](const std::shared_ptr<ast::bitwise_xor_binary_expression_t>& expr) {
+            print_bitwise_xor_binary_expression(*expr);
+        },
+        [](const ast::bitwise_and_expression_t& expr) {
+            print_bitwise_and_expression(expr);
+        }
+    }, expr);
+}
+void print_bitwise_or_binary_expression(const ast::bitwise_or_binary_expression_t& expr) {
+    std::cout << "(bitwise_or: ";
+    print_bitwise_or_expression(expr.lhs);
+    print_bitwise_or_expression(expr.rhs);
+    std::cout << ')';
+}
+void print_bitwise_or_expression(const ast::bitwise_or_expression_t& expr) {
+    std::visit(overloaded{
+        [](const std::shared_ptr<ast::bitwise_or_binary_expression_t>& expr) {
+            print_bitwise_or_binary_expression(*expr);
+        },
+        [](const ast::bitwise_xor_expression_t& expr) {
+            print_bitwise_xor_expression(expr);
+        }
+    }, expr);
+}
 void print_logical_and_binary_expression(const ast::logical_and_binary_expression_t& expr) {
-    std::cout << "(logical_and [" << static_cast<std::uint16_t>(expr.op) << "]: ";
+    std::cout << "(logical_and: ";
     print_logical_and_expression(expr.lhs);
     print_logical_and_expression(expr.rhs);
     std::cout << ')';
@@ -110,13 +189,13 @@ void print_logical_and_expression(const ast::logical_and_expression_t& expr) {
         [](const std::shared_ptr<ast::logical_and_binary_expression_t>& expr) {
             print_logical_and_binary_expression(*expr);
         },
-        [](const ast::equality_expression_t& expr) {
-            print_equality_expression(expr);
+        [](const ast::bitwise_or_expression_t& expr) {
+            print_bitwise_or_expression(expr);
         }
     }, expr);
 }
 void print_logical_or_binary_expression(const ast::logical_or_binary_expression_t& expr) {
-    std::cout << "(logical_or [" << static_cast<std::uint16_t>(expr.op) << "]: ";
+    std::cout << "(logical_or: ";
     print_logical_or_expression(expr.lhs);
     print_logical_or_expression(expr.rhs);
     std::cout << ')';
@@ -138,7 +217,7 @@ void print_assignment(const ast::assignment_t& assignment) {
     print_expression(assignment.expr);
     std::cout << ')';
 }
-void print_expression(const ast::expression_t& expr) {
+void print_assignment_expression(const ast::assignment_expression_t& assignment) {
     std::visit(overloaded{
         [](const std::shared_ptr<ast::assignment_t>& expr) {
             print_assignment(*expr);
@@ -146,7 +225,26 @@ void print_expression(const ast::expression_t& expr) {
         [](const ast::logical_or_expression_t& expr) {
             print_logical_or_expression(expr);
         }
+    }, assignment);
+}
+void print_comma_operator_binary_expression(const ast::comma_operator_binary_expression_t& expr) {
+    std::cout << "(comma_operator: ";
+    print_comma_expression(expr.lhs);
+    print_comma_expression(expr.rhs);
+    std::cout << ')';
+}
+void print_comma_expression(const ast::comma_operator_expression_t& expr) {
+    std::visit(overloaded{
+        [](const std::shared_ptr<ast::comma_operator_binary_expression_t>& expr) {
+            print_comma_operator_binary_expression(*expr);
+        },
+        [](const ast::assignment_expression_t& expr) {
+            print_assignment_expression(expr);
+        }
     }, expr);
+}
+void print_expression(const ast::expression_t& expr) {
+    print_comma_expression(expr);
 }
 void print_declaration(const ast::declaration_t& declaration) {
     std::cout << "(declaration: ";

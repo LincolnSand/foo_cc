@@ -6,11 +6,10 @@
 #include <vector>
 #include <stdexcept>
 
-// debugging:
-#include <iostream>
-
 #include <utils/common.hpp>
 
+// debugging:
+#include <iostream>
 
 
 enum class token_type_t : std::uint32_t {
@@ -74,7 +73,6 @@ struct token_t {
         line_number(line_number)
     {}
 };
-
 
 struct lexer_t {
     const char* start; // start character of current token being lexed
@@ -143,8 +141,6 @@ struct lexer_t {
         return token_t{token_type, {start, current_token_str_len()}, current_line_number};
     }
 };
-
-
 
 
 token_type_t handle_number(lexer_t& lexer);

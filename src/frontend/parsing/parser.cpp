@@ -3,7 +3,7 @@
 
 ast::var_name_t parse_var_name(parser_t& parser) {
     auto identifier_token = parser.advance_token();
-    if(identifier_token.token_type != token_type_t::IDENTIFIER) {
+    if(!is_var_name(identifier_token)) {
         throw std::runtime_error("invalid identifier: [" + std::to_string(static_cast<std::uint32_t>(parser.peek_token().token_type)) + std::string("]"));
     }
 
@@ -11,7 +11,7 @@ ast::var_name_t parse_var_name(parser_t& parser) {
 }
 ast::constant_t parse_constant(parser_t& parser) {
     auto next = parser.advance_token();
-    if(next.token_type != token_type_t::INT_CONSTANT) {
+    if(!is_constant(next)) {
         throw std::runtime_error("invalid constant: [" + std::to_string(static_cast<std::uint32_t>(next.token_type)) + std::string("]"));
     }
 
@@ -19,10 +19,10 @@ ast::constant_t parse_constant(parser_t& parser) {
     utils::str_to_int(next.token_text, result);
     return ast::constant_t { result };
 }
-std::shared_ptr<ast::unary_op_expression_t> parse_unary_expression(parser_t& parser) {
-    auto op = convert_to_unary_token(parser.advance_token());
+std::shared_ptr<ast::highest_precedence_unary_expression_t> parse_highest_precedence_unary_expression(parser_t& parser) {
+    auto op = convert_to_highest_precedence_unary_token(parser.advance_token());
     auto factor = parse_factor(parser);
-    return make_unary_expression(op, factor);
+    return make_highest_precedence_unary_expression(op, factor);
 }
 std::shared_ptr<ast::grouping_t> parse_grouping(parser_t& parser) {
     parser.advance_token();
@@ -37,8 +37,8 @@ ast::factor_t parse_factor(parser_t& parser) {
     auto next = parser.peek_token();
     if(next.token_type == token_type_t::LEFT_PAREN) {
         return parse_grouping(parser);
-    } else if(is_unary_operator(next)) {
-        return parse_unary_expression(parser);
+    } else if(is_highest_precedence_unary_operator(next)) {
+        return parse_highest_precedence_unary_expression(parser);
     } else if(is_constant(next)) {
         return parse_constant(parser);
     } else if(is_var_name(next)) {
@@ -47,12 +47,18 @@ ast::factor_t parse_factor(parser_t& parser) {
         throw std::runtime_error("invalid factor");
     }
 }
+ast::unary_expression_t parse_unary_expression(parser_t& parser) {
+    if(is_unary_op(parser.peek_token())) {
+        auto op = convert_to_unary_token(parser.advance_token());
+        return make_unary_expression(op, parse_unary_expression(parser));
+    }
+    return ast::unary_expression_t{parse_factor(parser)};
+}
 ast::times_divide_expression_t parse_times_divide_expression(parser_t& parser) {
-    ast::times_divide_expression_t first_param = parse_factor(parser);
+    ast::times_divide_expression_t first_param = parse_unary_expression(parser);
     while(parser.peek_token().token_type == token_type_t::ASTERISK || parser.peek_token().token_type == token_type_t::SLASH) {
         auto op = convert_to_times_divide_token(parser.advance_token());
-        ast::times_divide_expression_t second_term = parse_factor(parser);
-        first_param = make_times_divide_binary_expression(first_param, op, second_term);
+        first_param = make_times_divide_binary_expression(first_param, op, parse_unary_expression(parser));
     }
     return first_param;
 }
@@ -60,17 +66,23 @@ ast::plus_minus_expression_t parse_plus_minus_expression(parser_t& parser) {
     ast::plus_minus_expression_t first_param = parse_times_divide_expression(parser);
     while(parser.peek_token().token_type == token_type_t::PLUS || parser.peek_token().token_type == token_type_t::DASH) {
         auto op = convert_to_plus_minus_token(parser.advance_token());
-        ast::plus_minus_expression_t second_term = parse_times_divide_expression(parser);
-        first_param = make_plus_minus_binary_expression(first_param, op, second_term);
+        first_param = make_plus_minus_binary_expression(first_param, op, parse_times_divide_expression(parser));
+    }
+    return first_param;
+}
+ast::bitshift_expression_t parse_bitshift_expression(parser_t& parser) {
+    ast::bitshift_expression_t first_param = parse_plus_minus_expression(parser);
+    while(parser.peek_token().token_type == token_type_t::BITWISE_LEFT_SHIFT || parser.peek_token().token_type == token_type_t::BITWISE_RIGHT_SHIFT) {
+        auto op = convert_to_bitshift_token(parser.advance_token());
+        first_param = make_bitshift_binary_expression(first_param, op, parse_plus_minus_expression(parser));
     }
     return first_param;
 }
 ast::relational_expression_t parse_relational_expression(parser_t& parser) {
-    ast::relational_expression_t first_param = parse_plus_minus_expression(parser);
+    ast::relational_expression_t first_param = parse_bitshift_expression(parser);
     while(parser.peek_token().token_type == token_type_t::LESS_THAN || parser.peek_token().token_type == token_type_t::GREATER_THAN || parser.peek_token().token_type == token_type_t::LESS_THAN_EQUAL || parser.peek_token().token_type == token_type_t::GREATER_THAN_EQUAL) {
         auto op = convert_to_relational_token(parser.advance_token());
-        ast::relational_expression_t second_term = parse_plus_minus_expression(parser);
-        first_param = make_relational_binary_expression(first_param, op, second_term);
+        first_param = make_relational_binary_expression(first_param, op, parse_bitshift_expression(parser));
     }
     return first_param;
 }
@@ -78,36 +90,68 @@ ast::equality_expression_t parse_equality_expression(parser_t& parser) {
     ast::equality_expression_t first_param = parse_relational_expression(parser);
     while(parser.peek_token().token_type == token_type_t::EQUAL_EQUAL || parser.peek_token().token_type == token_type_t::NOT_EQUAL) {
         auto op = convert_to_equality_token(parser.advance_token());
-        ast::equality_expression_t second_term = parse_relational_expression(parser);
-        first_param = make_equality_binary_expression(first_param, op, second_term);
+        first_param = make_equality_binary_expression(first_param, op, parse_relational_expression(parser));
+    }
+    return first_param;
+}
+ast::bitwise_and_expression_t parse_bitwise_and_expression(parser_t& parser) {
+    ast::bitwise_and_expression_t first_param = parse_equality_expression(parser);
+    while(parser.peek_token().token_type == token_type_t::BITWISE_AND) {
+        parser.advance_token(); // consume `&` token
+        first_param = make_bitwise_and_binary_expression(first_param, parse_equality_expression(parser));
+    }
+    return first_param;
+}
+ast::bitwise_xor_expression_t parse_bitwise_xor_expression(parser_t& parser) {
+    ast::bitwise_xor_expression_t first_param = parse_bitwise_and_expression(parser);
+    while(parser.peek_token().token_type == token_type_t::BITWISE_XOR) {
+        parser.advance_token(); // consume `^` token
+        first_param = make_bitwise_xor_binary_expression(first_param, parse_bitwise_and_expression(parser));
+    }
+    return first_param;
+}
+ast::bitwise_or_expression_t parse_bitwise_or_expression(parser_t& parser) {
+    ast::bitwise_or_expression_t first_param = parse_bitwise_xor_expression(parser);
+    while(parser.peek_token().token_type == token_type_t::BITWISE_OR) {
+        parser.advance_token(); // consume `|` token
+        first_param = make_bitwise_or_binary_expression(first_param, parse_bitwise_xor_expression(parser));
     }
     return first_param;
 }
 ast::logical_and_expression_t parse_logical_and_expression(parser_t& parser) {
-    ast::logical_and_expression_t first_param = parse_equality_expression(parser);
+    ast::logical_and_expression_t first_param = parse_bitwise_or_expression(parser);
     while(parser.peek_token().token_type == token_type_t::LOGIC_AND) {
-        auto op = convert_to_logical_and_token(parser.advance_token());
-        ast::logical_and_expression_t second_term = parse_equality_expression(parser);
-        first_param = make_logical_and_binary_expression(first_param, op, second_term);
+        parser.advance_token(); // consume `&&` token
+        first_param = make_logical_and_binary_expression(first_param, parse_bitwise_or_expression(parser));
     }
     return first_param;
 }
 ast::logical_or_expression_t parse_logical_or_expression(parser_t& parser) {
     ast::logical_or_expression_t first_param = parse_logical_and_expression(parser);
     while(parser.peek_token().token_type == token_type_t::LOGIC_OR) {
-        auto op = convert_to_logical_or_token(parser.advance_token());
-        ast::logical_or_expression_t second_param = parse_logical_and_expression(parser);
-        first_param = make_logical_or_binary_expression(first_param, op, second_param);
+        parser.advance_token(); // consume `||` token
+        first_param = make_logical_or_binary_expression(first_param, parse_logical_and_expression(parser));
+    }
+    return first_param;
+}
+ast::assignment_expression_t parse_assignment_expression(parser_t& parser) {
+    ast::assignment_expression_t first_param = parse_logical_or_expression(parser);
+    if(parser.peek_token().token_type == token_type_t::EQUALS) {
+        parser.advance_token(); // consume `=` token
+        return make_assignment_expression(first_param, parse_logical_or_expression(parser)); // `make_assignment_expression()` validates that `first_param` is a valid lvalue
+    }
+    return first_param;
+}
+ast::comma_operator_expression_t parse_comma_expression(parser_t& parser) {
+    ast::comma_operator_expression_t first_param = parse_assignment_expression(parser);
+    while(parser.peek_token().token_type == token_type_t::COMMA) {
+        parser.advance_token(); // consume `,` token
+        first_param = make_comma_operator_expression(first_param, parse_assignment_expression(parser));
     }
     return first_param;
 }
 ast::expression_t parse_expression(parser_t& parser) {
-    ast::expression_t first_param = parse_logical_or_expression(parser);
-    if(parser.peek_token().token_type == token_type_t::EQUALS) {
-        parser.advance_token(); // consume `=` token
-        return make_assignment_expression(first_param, parse_expression(parser)); // `make_assignment_expression()` validates that `first_param` is a valid lvalue
-    }
-    return first_param;
+    return parse_comma_expression(parser);
 }
 ast::declaration_t parse_declaration(parser_t& parser) {
     if(parser.advance_token().token_type != token_type_t::INT_KEYWORD) {

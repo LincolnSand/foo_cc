@@ -4,7 +4,7 @@
 #include <io/file_io.hpp>
 #include <frontend/lexing/lexer.hpp>
 #include <frontend/parsing/parser.hpp>
-#include <backend/x86_64/traverse_ast.hpp>
+//#include <backend/x86_64/traverse_ast.hpp>
 
 
 int main(int argc, char** argv) {
@@ -29,14 +29,11 @@ int main(int argc, char** argv) {
         parser_t parser(tokens_list);
         ast::program_t ast = parse(parser);
         print_ast(ast);
-        std::string assembly_output = generate_asm(ast);
-        write_string_into_file(assembly_output, out_filename.c_str());
+        //std::string assembly_output = generate_asm(ast);
+        //write_string_into_file(assembly_output, out_filename.c_str());
     } else {
         std::cout << "You require an input file\n";
     }
 
     return 0;
 }
-
-
-
