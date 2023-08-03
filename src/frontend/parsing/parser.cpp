@@ -19,140 +19,265 @@ ast::constant_t parse_constant(parser_t& parser) {
     utils::str_to_int(next.token_text, result);
     return ast::constant_t { result };
 }
-std::shared_ptr<ast::highest_precedence_unary_expression_t> parse_highest_precedence_unary_expression(parser_t& parser) {
-    auto op = convert_to_highest_precedence_unary_token(parser.advance_token());
-    auto factor = parse_factor(parser);
-    return make_highest_precedence_unary_expression(op, factor);
-}
 std::shared_ptr<ast::grouping_t> parse_grouping(parser_t& parser) {
     parser.advance_token();
-    auto exp = parse_expression(parser);
+    auto exp = parse_expression(parser, 0u);
     if(parser.peek_token().token_type != token_type_t::RIGHT_PAREN) {
         throw std::runtime_error("expected `)`");
     }
     parser.advance_token();
-    return make_grouping(exp);
+    return make_grouping(std::move(exp));
 }
-ast::factor_t parse_factor(parser_t& parser) {
-    auto next = parser.peek_token();
-    if(next.token_type == token_type_t::LEFT_PAREN) {
-        return parse_grouping(parser);
-    } else if(is_highest_precedence_unary_operator(next)) {
-        return parse_highest_precedence_unary_expression(parser);
-    } else if(is_constant(next)) {
-        return parse_constant(parser);
-    } else if(is_var_name(next)) {
-        return parse_var_name(parser);
-    } else {
-        throw std::runtime_error("invalid factor");
+
+
+bool is_prefix_op(const token_t& token) {
+    switch(token.token_type) {
+        case token_type_t::PLUS_PLUS:
+        case token_type_t::DASH_DASH:
+        case token_type_t::PLUS:
+        case token_type_t::DASH:
+        case token_type_t::BANG:
+        case token_type_t::TILDE:
+            return true;
+    }
+    return false;
+}
+ast::unary_operator_token_t parse_prefix_op(const token_t& token) {
+    switch(token.token_type) {
+        case token_type_t::PLUS_PLUS:
+            return ast::unary_operator_token_t::PLUS_PLUS;
+        case token_type_t::DASH_DASH:
+            return ast::unary_operator_token_t::MINUS_MINUS;
+        case token_type_t::PLUS:
+            return ast::unary_operator_token_t::PLUS;
+        case token_type_t::DASH:
+            return ast::unary_operator_token_t::MINUS;
+        case token_type_t::BANG:
+            return ast::unary_operator_token_t::LOGICAL_NOT;
+        case token_type_t::TILDE:
+            return ast::unary_operator_token_t::BITWISE_NOT;
+    }
+    throw std::runtime_error("invalid prefix token.");
+}
+ast::precedence_t prefix_binding_power(const ast::unary_operator_token_t token) {
+    switch(token) {
+        case ast::unary_operator_token_t::PLUS_PLUS:
+        case ast::unary_operator_token_t::MINUS_MINUS:
+        case ast::unary_operator_token_t::PLUS:
+        case ast::unary_operator_token_t::MINUS:
+        case ast::unary_operator_token_t::LOGICAL_NOT:
+        case ast::unary_operator_token_t::BITWISE_NOT:
+            return 25;
+    }
+    throw std::runtime_error("invalid prefix token.");
+}
+std::shared_ptr<ast::unary_expression_t> make_prefix_op(const ast::unary_operator_token_t op, ast::expression_t&& rhs) {
+    return std::make_shared<ast::unary_expression_t>(ast::unary_expression_t{ast::unary_operator_fixity_t::PREFIX, op, std::move(rhs)});
+}
+ast::expression_t parse_prefix_expression(parser_t& parser) {
+    switch(parser.peek_token().token_type) {
+        case token_type_t::IDENTIFIER:
+            return parse_var_name(parser);
+        case token_type_t::INT_CONSTANT:
+            return parse_constant(parser);
+        case token_type_t::LEFT_PAREN:
+            return parse_grouping(parser);
+        default:
+            if(is_prefix_op(parser.peek_token())) {
+                auto op = parse_prefix_op(parser.advance_token());
+                auto r_bp = prefix_binding_power(op);
+                auto rhs = parse_expression(parser, r_bp);
+                return make_prefix_op(op, std::move(rhs));
+            }
+            std::cout << parser.peek_token().token_text << std::endl;
+            throw std::runtime_error("invalid prefix expression");
     }
 }
-ast::unary_expression_t parse_unary_expression(parser_t& parser) {
-    if(is_unary_op(parser.peek_token())) {
-        auto op = convert_to_unary_token(parser.advance_token());
-        return make_unary_expression(op, parse_unary_expression(parser));
+bool is_postfix_op(const token_t& token) {
+    switch(token.token_type) {
+        case token_type_t::PLUS_PLUS:
+        case token_type_t::DASH_DASH:
+            return true;
     }
-    return ast::unary_expression_t{parse_factor(parser)};
+    return false;
 }
-ast::times_divide_expression_t parse_times_divide_expression(parser_t& parser) {
-    ast::times_divide_expression_t first_param = parse_unary_expression(parser);
-    while(parser.peek_token().token_type == token_type_t::ASTERISK || parser.peek_token().token_type == token_type_t::SLASH) {
-        auto op = convert_to_times_divide_token(parser.advance_token());
-        first_param = make_times_divide_binary_expression(first_param, op, parse_unary_expression(parser));
+ast::unary_operator_token_t parse_postfix_op(const token_t& token) {
+    switch(token.token_type) {
+        case token_type_t::PLUS_PLUS:
+            return ast::unary_operator_token_t::PLUS_PLUS;
+        case token_type_t::DASH_DASH:
+            return ast::unary_operator_token_t::MINUS_MINUS;
     }
-    return first_param;
+    throw std::runtime_error("invalid postfix token.");
 }
-ast::plus_minus_expression_t parse_plus_minus_expression(parser_t& parser) {
-    ast::plus_minus_expression_t first_param = parse_times_divide_expression(parser);
-    while(parser.peek_token().token_type == token_type_t::PLUS || parser.peek_token().token_type == token_type_t::DASH) {
-        auto op = convert_to_plus_minus_token(parser.advance_token());
-        first_param = make_plus_minus_binary_expression(first_param, op, parse_times_divide_expression(parser));
+ast::precedence_t postfix_binding_power(const ast::unary_operator_token_t token) {
+    switch(token) {
+        case ast::unary_operator_token_t::PLUS_PLUS:
+        case ast::unary_operator_token_t::MINUS_MINUS:
+            return 26;
     }
-    return first_param;
+    throw std::runtime_error("invalid postfix token.");
 }
-ast::bitshift_expression_t parse_bitshift_expression(parser_t& parser) {
-    ast::bitshift_expression_t first_param = parse_plus_minus_expression(parser);
-    while(parser.peek_token().token_type == token_type_t::BITWISE_LEFT_SHIFT || parser.peek_token().token_type == token_type_t::BITWISE_RIGHT_SHIFT) {
-        auto op = convert_to_bitshift_token(parser.advance_token());
-        first_param = make_bitshift_binary_expression(first_param, op, parse_plus_minus_expression(parser));
-    }
-    return first_param;
+std::shared_ptr<ast::unary_expression_t> make_postfix_op(const ast::unary_operator_token_t op, ast::expression_t&& lhs) {
+    return std::make_shared<ast::unary_expression_t>(ast::unary_expression_t{ast::unary_operator_fixity_t::POSTFIX, op, std::move(lhs)});
 }
-ast::relational_expression_t parse_relational_expression(parser_t& parser) {
-    ast::relational_expression_t first_param = parse_bitshift_expression(parser);
-    while(parser.peek_token().token_type == token_type_t::LESS_THAN || parser.peek_token().token_type == token_type_t::GREATER_THAN || parser.peek_token().token_type == token_type_t::LESS_THAN_EQUAL || parser.peek_token().token_type == token_type_t::GREATER_THAN_EQUAL) {
-        auto op = convert_to_relational_token(parser.advance_token());
-        first_param = make_relational_binary_expression(first_param, op, parse_bitshift_expression(parser));
+bool is_infix_binary_op(const token_t& token) {
+    switch(token.token_type) {
+        case token_type_t::ASTERISK:
+        case token_type_t::SLASH:
+        case token_type_t::MODULO:
+        case token_type_t::PLUS:
+        case token_type_t::DASH:
+        case token_type_t::BITWISE_LEFT_SHIFT:
+        case token_type_t::BITWISE_RIGHT_SHIFT:
+        case token_type_t::LESS_THAN:
+        case token_type_t::LESS_THAN_EQUAL:
+        case token_type_t::GREATER_THAN:
+        case token_type_t::GREATER_THAN_EQUAL:
+        case token_type_t::EQUAL_EQUAL:
+        case token_type_t::NOT_EQUAL:
+        case token_type_t::BITWISE_AND:
+        case token_type_t::BITWISE_XOR:
+        case token_type_t::BITWISE_OR:
+        case token_type_t::LOGIC_AND:
+        case token_type_t::LOGIC_OR:
+        case token_type_t::EQUALS:
+        case token_type_t::COMMA:
+            return true;
     }
-    return first_param;
+    return false;
 }
-ast::equality_expression_t parse_equality_expression(parser_t& parser) {
-    ast::equality_expression_t first_param = parse_relational_expression(parser);
-    while(parser.peek_token().token_type == token_type_t::EQUAL_EQUAL || parser.peek_token().token_type == token_type_t::NOT_EQUAL) {
-        auto op = convert_to_equality_token(parser.advance_token());
-        first_param = make_equality_binary_expression(first_param, op, parse_relational_expression(parser));
+ast::binary_operator_token_t parse_infix_binary_op(const token_t& token) {
+    switch(token.token_type) {
+        case token_type_t::ASTERISK:
+            return ast::binary_operator_token_t::MULTIPLY;
+        case token_type_t::SLASH:
+            return ast::binary_operator_token_t::DIVIDE;
+        case token_type_t::MODULO:
+            return ast::binary_operator_token_t::MODULO;
+        case token_type_t::PLUS:
+            return ast::binary_operator_token_t::PLUS;
+        case token_type_t::DASH:
+            return ast::binary_operator_token_t::MINUS;
+        case token_type_t::BITWISE_LEFT_SHIFT:
+            return ast::binary_operator_token_t::LEFT_BITSHIFT;
+        case token_type_t::BITWISE_RIGHT_SHIFT:
+            return ast::binary_operator_token_t::RIGHT_BITSHIFT;
+        case token_type_t::LESS_THAN:
+            return ast::binary_operator_token_t::LESS_THAN;
+        case token_type_t::LESS_THAN_EQUAL:
+            return ast::binary_operator_token_t::LESS_THAN_EQUAL;
+        case token_type_t::GREATER_THAN:
+            return ast::binary_operator_token_t::GREATER_THAN;
+        case token_type_t::GREATER_THAN_EQUAL:
+            return ast::binary_operator_token_t::GREATER_THAN_EQUAL;
+        case token_type_t::EQUAL_EQUAL:
+            return ast::binary_operator_token_t::EQUAL;
+        case token_type_t::NOT_EQUAL:
+            return ast::binary_operator_token_t::NOT_EQUAL;
+        case token_type_t::BITWISE_AND:
+            return ast::binary_operator_token_t::BITWISE_AND;
+        case token_type_t::BITWISE_XOR:
+            return ast::binary_operator_token_t::BITWISE_XOR;
+        case token_type_t::BITWISE_OR:
+            return ast::binary_operator_token_t::BITWISE_OR;
+        case token_type_t::LOGIC_AND:
+            return ast::binary_operator_token_t::LOGICAL_AND;
+        case token_type_t::LOGIC_OR:
+            return ast::binary_operator_token_t::LOGICAL_OR;
+        case token_type_t::EQUALS:
+            return ast::binary_operator_token_t::ASSIGNMENT;
+        case token_type_t::COMMA:
+            return ast::binary_operator_token_t::COMMA;
     }
-    return first_param;
+    throw std::runtime_error("invalid infix token.");
 }
-ast::bitwise_and_expression_t parse_bitwise_and_expression(parser_t& parser) {
-    ast::bitwise_and_expression_t first_param = parse_equality_expression(parser);
-    while(parser.peek_token().token_type == token_type_t::BITWISE_AND) {
-        parser.advance_token(); // consume `&` token
-        first_param = make_bitwise_and_binary_expression(first_param, parse_equality_expression(parser));
+std::pair<ast::precedence_t, ast::precedence_t> infix_binding_power(const ast::binary_operator_token_t token) {
+    switch(token) {
+        case ast::binary_operator_token_t::MULTIPLY:
+        case ast::binary_operator_token_t::DIVIDE:
+        case ast::binary_operator_token_t::MODULO:
+            return {23, 24};
+        case ast::binary_operator_token_t::PLUS:
+        case ast::binary_operator_token_t::MINUS:
+            return {21, 22};
+        case ast::binary_operator_token_t::LEFT_BITSHIFT:
+        case ast::binary_operator_token_t::RIGHT_BITSHIFT:
+            return {19, 20};
+        case ast::binary_operator_token_t::LESS_THAN:
+        case ast::binary_operator_token_t::LESS_THAN_EQUAL:
+        case ast::binary_operator_token_t::GREATER_THAN:
+        case ast::binary_operator_token_t::GREATER_THAN_EQUAL:
+            return {17, 18};
+        case ast::binary_operator_token_t::EQUAL:
+        case ast::binary_operator_token_t::NOT_EQUAL:
+            return {15, 16};
+        case ast::binary_operator_token_t::BITWISE_AND:
+            return {13, 14};
+        case ast::binary_operator_token_t::BITWISE_XOR:
+            return {11, 12};
+        case ast::binary_operator_token_t::BITWISE_OR:
+            return {9, 10};
+        case ast::binary_operator_token_t::LOGICAL_AND:
+            return {7, 8};
+        case ast::binary_operator_token_t::LOGICAL_OR:
+            return {5, 6};
+        case ast::binary_operator_token_t::ASSIGNMENT:
+            return {4, 3}; // right-to-left
+        case ast::binary_operator_token_t::COMMA:
+            return {1, 2}; // left-to-right
     }
-    return first_param;
+    throw std::runtime_error("invalid infix token.");
 }
-ast::bitwise_xor_expression_t parse_bitwise_xor_expression(parser_t& parser) {
-    ast::bitwise_xor_expression_t first_param = parse_bitwise_and_expression(parser);
-    while(parser.peek_token().token_type == token_type_t::BITWISE_XOR) {
-        parser.advance_token(); // consume `^` token
-        first_param = make_bitwise_xor_binary_expression(first_param, parse_bitwise_and_expression(parser));
-    }
-    return first_param;
+std::shared_ptr<ast::binary_expression_t> make_infix_op(const ast::binary_operator_token_t op, ast::expression_t&& lhs, ast::expression_t&& rhs) {
+    return std::make_shared<ast::binary_expression_t>(ast::binary_expression_t{op, std::move(lhs), std::move(rhs)});
 }
-ast::bitwise_or_expression_t parse_bitwise_or_expression(parser_t& parser) {
-    ast::bitwise_or_expression_t first_param = parse_bitwise_xor_expression(parser);
-    while(parser.peek_token().token_type == token_type_t::BITWISE_OR) {
-        parser.advance_token(); // consume `|` token
-        first_param = make_bitwise_or_binary_expression(first_param, parse_bitwise_xor_expression(parser));
+ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t precedence) {
+    std::cout << "parse_expression: " << parser.peek_token().token_text << ", " << precedence << std::endl;
+    auto lhs = parse_prefix_expression(parser);
+
+    for(;;) {
+        if(parser.peek_token().token_type == token_type_t::EOF_TOK) {
+            break;
+        }
+
+        if(is_postfix_op(parser.peek_token())) {
+            std::cout << "postfix token" << std::endl;
+            auto op = parse_postfix_op(parser.peek_token());
+            auto post_bp = postfix_binding_power(op);
+            if(post_bp < precedence) {
+                std::cout << "(post_bp < precedence)" << std::endl;
+                break;
+            }
+            parser.advance_token();
+            lhs = make_postfix_op(op, std::move(lhs));
+            continue;
+        }
+
+        if(is_infix_binary_op(parser.peek_token())) {
+            std::cout << "infix token: " << parser.peek_token().token_text << std::endl;
+            auto op = parse_infix_binary_op(parser.peek_token());
+            auto [r_bp, l_bp] = infix_binding_power(op);
+            if(l_bp < precedence) {
+                std::cout << "(l_bp < precedence)" << std::endl;
+                break;
+            }
+            parser.advance_token();
+            auto rhs = parse_expression(parser, r_bp);
+            lhs = make_infix_op(op, std::move(lhs), std::move(rhs));
+            continue;
+        }
+
+        break;
     }
-    return first_param;
-}
-ast::logical_and_expression_t parse_logical_and_expression(parser_t& parser) {
-    ast::logical_and_expression_t first_param = parse_bitwise_or_expression(parser);
-    while(parser.peek_token().token_type == token_type_t::LOGIC_AND) {
-        parser.advance_token(); // consume `&&` token
-        first_param = make_logical_and_binary_expression(first_param, parse_bitwise_or_expression(parser));
-    }
-    return first_param;
-}
-ast::logical_or_expression_t parse_logical_or_expression(parser_t& parser) {
-    ast::logical_or_expression_t first_param = parse_logical_and_expression(parser);
-    while(parser.peek_token().token_type == token_type_t::LOGIC_OR) {
-        parser.advance_token(); // consume `||` token
-        first_param = make_logical_or_binary_expression(first_param, parse_logical_and_expression(parser));
-    }
-    return first_param;
-}
-ast::assignment_expression_t parse_assignment_expression(parser_t& parser) {
-    ast::assignment_expression_t first_param = parse_logical_or_expression(parser);
-    if(parser.peek_token().token_type == token_type_t::EQUALS) {
-        parser.advance_token(); // consume `=` token
-        return make_assignment_expression(first_param, parse_logical_or_expression(parser)); // `make_assignment_expression()` validates that `first_param` is a valid lvalue
-    }
-    return first_param;
-}
-ast::comma_operator_expression_t parse_comma_expression(parser_t& parser) {
-    ast::comma_operator_expression_t first_param = parse_assignment_expression(parser);
-    while(parser.peek_token().token_type == token_type_t::COMMA) {
-        parser.advance_token(); // consume `,` token
-        first_param = make_comma_operator_expression(first_param, parse_assignment_expression(parser));
-    }
-    return first_param;
+
+    return lhs;
 }
 ast::expression_t parse_expression(parser_t& parser) {
-    return parse_comma_expression(parser);
+    return parse_expression(parser, 0u);
 }
+
+
 ast::declaration_t parse_declaration(parser_t& parser) {
     if(parser.advance_token().token_type != token_type_t::INT_KEYWORD) {
         throw std::runtime_error("expected `int` keyword");
@@ -203,7 +328,6 @@ ast::statement_t parse_statement(parser_t& parser) {
 
     return statement;
 }
-// TODO: generate `return 0;` if no return statement in `main`
 ast::function_declaration_t parse_function_decl(parser_t& parser) {
     const auto keyword_token = parser.advance_token();
     if(keyword_token.token_type != token_type_t::INT_KEYWORD) {
@@ -240,7 +364,7 @@ ast::function_declaration_t parse_function_decl(parser_t& parser) {
     // TODO: check if the function identifier is `main` first for when we add support for other functions
     constexpr std::size_t RETURN_INDEX = 0;
     if(statements.size() == 0 || statements.at(statements.size() - 1).index() != RETURN_INDEX) {
-        statements.push_back(ast::return_statement_t { make_constant_expr(0) } );
+        statements.push_back(ast::return_statement_t { ast::expression_t{ast::constant_t{0}} } );
     }
 
     curly_token = parser.advance_token();

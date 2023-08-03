@@ -74,23 +74,11 @@ struct parser_t {
 
 ast::var_name_t parse_var_name(parser_t& parser);
 ast::constant_t parse_constant(parser_t& parser);
-std::shared_ptr<ast::highest_precedence_unary_expression_t> parse_highest_precedence_unary_expression(parser_t& parser);
 std::shared_ptr<ast::grouping_t> parse_grouping(parser_t& parser);
-ast::factor_t parse_factor(parser_t& parser);
-ast::unary_expression_t parse_unary_expression(parser_t& parser);
-ast::times_divide_expression_t parse_times_divide_expression(parser_t& parser);
-ast::plus_minus_expression_t parse_plus_minus_expression(parser_t& parser);
-ast::bitshift_expression_t parse_bitshift_expression(parser_t& parser);
-ast::relational_expression_t parse_relational_expression(parser_t& parser);
-ast::equality_expression_t parse_equality_expression(parser_t& parser);
-ast::bitwise_and_expression_t parse_bitwise_and_expression(parser_t& parser);
-ast::bitwise_xor_expression_t parse_bitwise_xor_expression(parser_t& parser);
-ast::bitwise_or_expression_t parse_bitwise_or_expression(parser_t& parser);
-ast::logical_and_expression_t parse_logical_and_expression(parser_t& parser);
-ast::logical_or_expression_t parse_logical_or_expression(parser_t& parser);
-ast::assignment_expression_t parse_assignment_expression(parser_t& parser);
-ast::comma_operator_expression_t parse_comma_expression(parser_t& parser);
+
+ast::expression_t parse_expression(parser_t& parser, ast::precedence_t precedence);
 ast::expression_t parse_expression(parser_t& parser);
+
 // the `;` token for return statements and declarations are consumed in `parse_statement()`, not in the corresponding parsing functions.
 ast::declaration_t parse_declaration(parser_t& parser);
 ast::return_statement_t parse_return_statement(parser_t& parser);
