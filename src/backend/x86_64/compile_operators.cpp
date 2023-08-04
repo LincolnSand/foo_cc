@@ -47,7 +47,7 @@ void generate_bitwise_not(assembly_output_t& assembly_output) {
     assembly_output.output += "not %rax\n";
     store_register(assembly_output, "rax");
 }
-void generate_logic_not(assembly_output_t& assembly_output) {
+void generate_logical_not(assembly_output_t& assembly_output) {
     pop_constant(assembly_output, "rax");
     assembly_output.output += "cmpq $0, %rax\n";
     assembly_output.output += "movq $0, %rax\n";
@@ -127,13 +127,19 @@ void generate_not_equals(assembly_output_t& assembly_output) {
     assembly_output.output += "setne %al\n";
     store_register(assembly_output, "rax");
 }
+void generate_comma(assembly_output_t& assembly_output) {
+    pop_constant(assembly_output, "rax");
+    pop_constant(assembly_output, "rcx");
 
+    store_register(assembly_output, "rax"); // comma operator discards result of left hand result after evaluation of expression
+}
+
+void generate_function_prologue(assembly_output_t& assembly_output) {
+    assembly_output.output += "pushq %rbp\n";
+    assembly_output.output += "movq %rsp, %rbp\n";
+}
 void generate_function_epilogue(assembly_output_t& assembly_output) {
     assembly_output.output += "movq %rbp, %rsp\n";
     assembly_output.output += "popq %rbp\n";
     assembly_output.output += "ret\n";
-}
-void generate_function_prologue(assembly_output_t& assembly_output) {
-    assembly_output.output += "pushq %rbp\n";
-    assembly_output.output += "movq %rsp, %rbp\n";
 }

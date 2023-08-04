@@ -1,30 +1,121 @@
 #include "traverse_ast.hpp"
 
 
-void generate_unary_op(assembly_output_t& assembly_output, const ast::unary_op_expression_t& op) {
-    generate_factor(assembly_output, op.expr);
-    switch(op.op) {
-        case ast::unary_op_t::NEG:
-            generate_negation(assembly_output);
-            break;
-        case ast::unary_op_t::BITWISE_NOT:
-            generate_bitwise_not(assembly_output);
-            break;
-        case ast::unary_op_t::LOGIC_NOT:
-            generate_logic_not(assembly_output);
-            break;
-    }
-}
 void generate_grouping(assembly_output_t& assembly_output, const ast::grouping_t& grouping) {
     generate_expression(assembly_output, grouping.expr);
 }
-void generate_factor(assembly_output_t& assembly_output, const ast::factor_t& factor) {
+void generate_binary_expression(assembly_output_t& assembly_output, const ast::binary_expression_t& binary_exp) {
+    switch(binary_exp.op) {
+        case ast::binary_operator_token_t::MULTIPLY:
+            generate_binary_operation(assembly_output, binary_exp, &generate_multiplication);
+            return;
+        case ast::binary_operator_token_t::DIVIDE:
+            generate_binary_operation(assembly_output, binary_exp, &generate_division);
+            return;
+        case ast::binary_operator_token_t::MODULO:
+            //generate_binary_operation(assembly_output, binary_exp, &generate_modulo);
+            return;
+        case ast::binary_operator_token_t::PLUS:
+            generate_binary_operation(assembly_output, binary_exp, &generate_addition);
+            return;
+        case ast::binary_operator_token_t::MINUS:
+            generate_binary_operation(assembly_output, binary_exp, &generate_subtraction);
+            return;
+        case ast::binary_operator_token_t::LEFT_BITSHIFT:
+            //generate_binary_operation(assembly_output, binary_exp, &generate_left_bitshift);
+            return;
+        case ast::binary_operator_token_t::RIGHT_BITSHIFT:
+            //generate_binary_operation(assembly_output, binary_exp, &generate_right_bitshift);
+            return;
+        case ast::binary_operator_token_t::LESS_THAN:
+            generate_binary_operation(assembly_output, binary_exp, &generate_less_than);
+            return;
+        case ast::binary_operator_token_t::LESS_THAN_EQUAL:
+            generate_binary_operation(assembly_output, binary_exp, &generate_less_than_equal);
+            return;
+        case ast::binary_operator_token_t::GREATER_THAN:
+            generate_binary_operation(assembly_output, binary_exp, &generate_greater_than);
+            return;
+        case ast::binary_operator_token_t::GREATER_THAN_EQUAL:
+            generate_binary_operation(assembly_output, binary_exp, &generate_greater_than_equal);
+            return;
+        case ast::binary_operator_token_t::EQUAL:
+            generate_binary_operation(assembly_output, binary_exp, &generate_equality);
+            return;
+        case ast::binary_operator_token_t::NOT_EQUAL:
+            generate_binary_operation(assembly_output, binary_exp, &generate_not_equals);
+            return;
+        case ast::binary_operator_token_t::BITWISE_AND:
+            //generate_binary_operation(assembly_output, binary_exp, &generate_bitwise_and);
+            return;
+        case ast::binary_operator_token_t::BITWISE_XOR:
+            //generate_binary_operation(assembly_output, binary_exp, &generate_bitwise_xor);
+            return;
+        case ast::binary_operator_token_t::BITWISE_OR:
+            //generate_binary_operation(assembly_output, binary_exp, &generate_bitwise_or);
+            return;
+        case ast::binary_operator_token_t::LOGICAL_AND:
+            generate_logical_and(assembly_output, binary_exp);
+            return;
+        case ast::binary_operator_token_t::LOGICAL_OR:
+            generate_logical_or(assembly_output, binary_exp);
+            return;
+        case ast::binary_operator_token_t::ASSIGNMENT:
+            generate_assignment_expression(assembly_output, binary_exp);
+            return;
+        case ast::binary_operator_token_t::COMMA:
+            generate_binary_operation(assembly_output, binary_exp, &generate_comma);
+            return;
+    }
+    throw std::runtime_error("invalid binary operator.");
+}
+void generate_unary_expression(assembly_output_t& assembly_output, const ast::unary_expression_t& unary_exp) {
+    if(unary_exp.fixity == ast::unary_operator_fixity_t::PREFIX) {
+        switch(unary_exp.op) {
+            case ast::unary_operator_token_t::PLUS_PLUS:
+                //generate_unary_operation(assembly_output, unary_exp, &generate_prefix_plus_plus);
+                return;
+            case ast::unary_operator_token_t::MINUS_MINUS:
+                //generate_unary_operation(assembly_output, unary_exp, &generate_prefix_minus_minus);
+                return;
+            case ast::unary_operator_token_t::PLUS:
+                //generate_unary_operation(assembly_output, unary_exp, &generate_unary_plus);
+                return;
+            case ast::unary_operator_token_t::MINUS:
+                generate_unary_operation(assembly_output, unary_exp, &generate_negation);
+                return;
+            case ast::unary_operator_token_t::LOGICAL_NOT:
+                generate_unary_operation(assembly_output, unary_exp, &generate_logical_not);
+                return;
+            case ast::unary_operator_token_t::BITWISE_NOT:
+                generate_unary_operation(assembly_output, unary_exp, &generate_bitwise_not);
+                return;
+        }
+        throw std::runtime_error("invalid prefix unary operator.");
+    } else if(unary_exp.fixity == ast::unary_operator_fixity_t::POSTFIX) {
+        switch(unary_exp.op) {
+            case ast::unary_operator_token_t::PLUS_PLUS:
+                //generate_unary_operation(assembly_output, unary_exp, &generate_postfix_plus_plus);
+                return;
+            case ast::unary_operator_token_t::MINUS_MINUS:
+                //generate_unary_operation(assembly_output, unary_exp, &generate_postfix_minus_minus);
+                return;
+        }
+        throw std::runtime_error("invalid unary postfix operator.");
+    } else {
+        throw std::runtime_error("invalid unary operator fixity.");
+    }
+}
+void generate_expression(assembly_output_t& assembly_output, const ast::expression_t& expression) {
     std::visit(overloaded{
-        [&assembly_output](const std::shared_ptr<ast::grouping_t>& factor) {
-            generate_grouping(assembly_output, *factor);
+        [&assembly_output](const std::shared_ptr<ast::grouping_t>& grouping) {
+            generate_grouping(assembly_output, *grouping);
         },
-        [&assembly_output](const std::shared_ptr<ast::unary_op_expression_t>& unary_exp) {
-            generate_unary_op(assembly_output, *unary_exp);
+        [&assembly_output](const std::shared_ptr<ast::binary_expression_t>& binary_exp) {
+            generate_binary_expression(assembly_output, *binary_exp);
+        },
+        [&assembly_output](const std::shared_ptr<ast::unary_expression_t>& unary_exp) {
+            generate_unary_expression(assembly_output, *unary_exp);
         },
         [&assembly_output](const ast::constant_t& constant) {
             store_constant(assembly_output, constant);
@@ -32,192 +123,6 @@ void generate_factor(assembly_output_t& assembly_output, const ast::factor_t& fa
         [&assembly_output](const ast::var_name_t& var_name) {
             pop_variable(assembly_output, var_name, "rax");
             store_register(assembly_output, "rax");
-        }
-    }, factor);
-}
-void generate_times_divide_binary_expression(assembly_output_t& assembly_output, const ast::times_divide_binary_expression_t& expr) {
-    generate_times_divide_expression(assembly_output, expr.lhs);
-    generate_times_divide_expression(assembly_output, expr.rhs);
-    switch(expr.op) {
-        case ast::times_divide_t::TIMES:
-            generate_multiplication(assembly_output);
-            break;
-        case ast::times_divide_t::DIVIDE:
-            generate_division(assembly_output);
-            break;
-    }
-}
-void generate_times_divide_expression(assembly_output_t& assembly_output, const ast::times_divide_expression_t& expr) {
-    std::visit(overloaded{
-        [&assembly_output](const std::shared_ptr<ast::times_divide_binary_expression_t>& expr) {
-            generate_times_divide_binary_expression(assembly_output, *expr);
-        },
-        [&assembly_output](const ast::factor_t& expr) {
-            generate_factor(assembly_output, expr);
-        }
-    }, expr);
-}
-void generate_plus_minus_binary_expression(assembly_output_t& assembly_output, const ast::plus_minus_binary_expression_t& expr) {
-    generate_plus_minus_expression(assembly_output, expr.lhs);
-    generate_plus_minus_expression(assembly_output, expr.rhs);
-    switch(expr.op) {
-        case ast::plus_minus_t::PLUS:
-            generate_addition(assembly_output);
-            break;
-        case ast::plus_minus_t::MINUS:
-            generate_subtraction(assembly_output);
-            break;
-    }
-}
-void generate_plus_minus_expression(assembly_output_t& assembly_output, const ast::plus_minus_expression_t& expr) {
-    std::visit(overloaded{
-        [&assembly_output](const std::shared_ptr<ast::plus_minus_binary_expression_t>& expr) {
-            generate_plus_minus_binary_expression(assembly_output, *expr);
-        },
-        [&assembly_output](const ast::times_divide_expression_t& expr) {
-            generate_times_divide_expression(assembly_output, expr);
-        }
-    }, expr);
-}
-void generate_relational_binary_expression(assembly_output_t& assembly_output, const ast::relational_binary_expression_t& expr) {
-    generate_relational_expression(assembly_output, expr.lhs);
-    generate_relational_expression(assembly_output, expr.rhs);
-    switch(expr.op) {
-        case ast::relational_t::LESS_THAN:
-            generate_less_than(assembly_output);
-            break;
-        case ast::relational_t::GREATER_THAN:
-            generate_greater_than(assembly_output);
-            break;
-        case ast::relational_t::LESS_THAN_EQUAL:
-            generate_less_than_equal(assembly_output);
-            break;
-        case ast::relational_t::GREATER_THAN_EQUAL:
-            generate_greater_than_equal(assembly_output);
-            break;
-    }
-}
-void generate_relational_expression(assembly_output_t& assembly_output, const ast::relational_expression_t& expr) {
-    std::visit(overloaded{
-        [&assembly_output](const std::shared_ptr<ast::relational_binary_expression_t>& expr) {
-            generate_relational_binary_expression(assembly_output, *expr);
-        },
-        [&assembly_output](const ast::plus_minus_expression_t& expr) {
-            generate_plus_minus_expression(assembly_output, expr);
-        }
-    }, expr);
-}
-void generate_equality_binary_expression(assembly_output_t& assembly_output, const ast::equality_binary_expression_t& expr) {
-    generate_equality_expression(assembly_output, expr.lhs);
-    generate_equality_expression(assembly_output, expr.rhs);
-    switch(expr.op) {
-        case ast::equality_t::EQUAL_EQUAL:
-            generate_equality(assembly_output);
-            break;
-        case ast::equality_t::NOT_EQUAL:
-            generate_not_equals(assembly_output);
-            break;
-    }
-}
-void generate_equality_expression(assembly_output_t& assembly_output, const ast::equality_expression_t& expr) {
-    std::visit(overloaded{
-        [&assembly_output](const std::shared_ptr<ast::equality_binary_expression_t>& expr) {
-            generate_equality_binary_expression(assembly_output, *expr);
-        },
-        [&assembly_output](const ast::relational_expression_t& expr) {
-            generate_relational_expression(assembly_output, expr);
-        }
-    }, expr);
-}
-void generate_logical_and_binary_expression(assembly_output_t& assembly_output, const ast::logical_and_binary_expression_t& expr) {
-    generate_logical_and_expression(assembly_output, expr.lhs);
-
-    pop_constant(assembly_output, "rax");
-
-    assembly_output.output += "cmpq $0, %rax\n";
-    std::string clause_2_label_name = "_clause2_" + std::to_string(assembly_output.current_label_number++);
-    std::string end_label_name = "_end_" + std::to_string(assembly_output.current_label_number++);
-    assembly_output.output += "jne " + clause_2_label_name + "\n";
-
-    // short circuit on false
-    assembly_output.output += "movq $1, %rax\n";
-    assembly_output.output += "jmp " + end_label_name + "\n";
-
-    assembly_output.output += clause_2_label_name + ":\n";
-
-    generate_logical_and_expression(assembly_output, expr.rhs);
-    pop_constant(assembly_output, "rax");
-
-    assembly_output.output += "cmpq $0, %rax\n";
-    assembly_output.output += "movq $0, %rax\n";
-    assembly_output.output += "setne %al\n";
-    assembly_output.output += end_label_name + ":\n";
-
-    store_register(assembly_output, "rax");
-}
-void generate_logical_and_expression(assembly_output_t& assembly_output, const ast::logical_and_expression_t& expr) {
-    std::visit(overloaded{
-        [&assembly_output](const std::shared_ptr<ast::logical_and_binary_expression_t>& expr) {
-            generate_logical_and_binary_expression(assembly_output, *expr);
-        },
-        [&assembly_output](const ast::equality_expression_t& expr) {
-            generate_equality_expression(assembly_output, expr);
-        }
-    }, expr);
-}
-void generate_logical_or_binary_expression(assembly_output_t& assembly_output, const ast::logical_or_binary_expression_t& expr) {
-    generate_logical_or_expression(assembly_output, expr.lhs);
-
-    pop_constant(assembly_output, "rax");
-
-    assembly_output.output += "cmpq $0, %rax\n";
-    std::string clause_2_label_name = "_clause2_" + std::to_string(assembly_output.current_label_number++);
-    std::string end_label_name = "_end_" + std::to_string(assembly_output.current_label_number++);
-    assembly_output.output += "je " + clause_2_label_name + "\n";
-
-    // short circuit on true
-    assembly_output.output += "movq $1, %rax\n";
-    assembly_output.output += "jmp " + end_label_name + "\n";
-
-    assembly_output.output += clause_2_label_name + ":\n";
-
-    generate_logical_or_expression(assembly_output, expr.rhs);
-    pop_constant(assembly_output, "rax");
-
-    assembly_output.output += "cmpq $0, %rax\n";
-    assembly_output.output += "movq $0, %rax\n";
-    assembly_output.output += "setne %al\n";
-    assembly_output.output += end_label_name + ":\n";
-
-    store_register(assembly_output, "rax");
-}
-void generate_logical_or_expression(assembly_output_t& assembly_output, const ast::logical_or_expression_t& expr) {
-    std::visit(overloaded{
-        [&assembly_output](const std::shared_ptr<ast::logical_or_binary_expression_t>& expr) {
-            generate_logical_or_binary_expression(assembly_output, *expr);
-        },
-        [&assembly_output](const ast::logical_and_expression_t& expr) {
-            generate_logical_and_expression(assembly_output, expr);
-        }
-    }, expr);
-}
-void generate_assignment(assembly_output_t& assembly_output, const ast::assignment_t& assignment) {
-    if(!assembly_output.variable_lookup.contains_in_accessible_scopes(assignment.var_name)) {
-        throw std::runtime_error("Variable " + assignment.var_name + " not declared in currently accessible scopes.");
-    }
-
-    generate_expression(assembly_output, assignment.expr);
-
-    pop_constant(assembly_output, "rax");
-    store_variable(assembly_output, assignment.var_name, "rax");
-}
-void generate_expression(assembly_output_t& assembly_output, const ast::expression_t& expression) {
-    std::visit(overloaded{
-        [&assembly_output](const std::shared_ptr<ast::assignment_t> expr) {
-            generate_assignment(assembly_output, *expr);
-        },
-        [&assembly_output](const ast::logical_or_expression_t& expr) {
-            generate_logical_or_expression(assembly_output, expr);
         }
     }, expression);
 }

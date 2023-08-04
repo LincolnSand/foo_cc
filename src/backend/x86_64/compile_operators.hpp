@@ -29,7 +29,7 @@ void allocate_stack_space_for_variable(assembly_output_t& assembly_output);
 
 void generate_negation(assembly_output_t& assembly_output);
 void generate_bitwise_not(assembly_output_t& assembly_output);
-void generate_logic_not(assembly_output_t& assembly_output);
+void generate_logical_not(assembly_output_t& assembly_output);
 void generate_multiplication(assembly_output_t& assembly_output);
 void generate_division(assembly_output_t& assembly_output);
 void generate_addition(assembly_output_t& assembly_output);
@@ -40,5 +40,7 @@ void generate_less_than_equal(assembly_output_t& assembly_output);
 void generate_greater_than_equal(assembly_output_t& assembly_output);
 void generate_equality(assembly_output_t& assembly_output);
 void generate_not_equals(assembly_output_t& assembly_output);
-void generate_function_epilogue(assembly_output_t& assembly_output);
+void generate_comma(assembly_output_t& assembly_output);
+
 void generate_function_prologue(assembly_output_t& assembly_output);
+void generate_function_epilogue(assembly_output_t& assembly_output);

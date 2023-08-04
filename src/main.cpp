@@ -4,7 +4,7 @@
 #include <io/file_io.hpp>
 #include <frontend/lexing/lexer.hpp>
 #include <frontend/parsing/parser.hpp>
-//#include <backend/x86_64/traverse_ast.hpp>
+#include <backend/x86_64/traverse_ast.hpp>
 
 
 int main(int argc, char** argv) {
@@ -21,16 +21,14 @@ int main(int argc, char** argv) {
     }
 
     if(argc > 1) {
-        //std::cout << "Input file: " << argv[1] << '\n';
-        //std::cout << "Output file: " << out_filename << '\n';
         std::string file_contents = read_file_into_string(argv[1]);
         lexer_t lexer(file_contents.c_str());
         std::vector<token_t> tokens_list = scan_all_tokens(lexer);
         parser_t parser(tokens_list);
         ast::program_t ast = parse(parser);
-        print_ast(ast);
-        //std::string assembly_output = generate_asm(ast);
-        //write_string_into_file(assembly_output, out_filename.c_str());
+        //print_ast(ast);
+        std::string assembly_output = generate_asm(ast);
+        write_string_into_file(assembly_output, out_filename.c_str());
     } else {
         std::cout << "You require an input file\n";
     }

@@ -89,7 +89,6 @@ ast::expression_t parse_prefix_expression(parser_t& parser) {
                 auto rhs = parse_expression(parser, r_bp);
                 return make_prefix_op(op, std::move(rhs));
             }
-            std::cout << parser.peek_token().token_text << std::endl;
             throw std::runtime_error("invalid prefix expression");
     }
 }
@@ -197,43 +196,42 @@ std::pair<ast::precedence_t, ast::precedence_t> infix_binding_power(const ast::b
         case ast::binary_operator_token_t::MULTIPLY:
         case ast::binary_operator_token_t::DIVIDE:
         case ast::binary_operator_token_t::MODULO:
-            return {23, 24};
+            return {24, 23};
         case ast::binary_operator_token_t::PLUS:
         case ast::binary_operator_token_t::MINUS:
-            return {21, 22};
+            return {22, 21};
         case ast::binary_operator_token_t::LEFT_BITSHIFT:
         case ast::binary_operator_token_t::RIGHT_BITSHIFT:
-            return {19, 20};
+            return {20, 19};
         case ast::binary_operator_token_t::LESS_THAN:
         case ast::binary_operator_token_t::LESS_THAN_EQUAL:
         case ast::binary_operator_token_t::GREATER_THAN:
         case ast::binary_operator_token_t::GREATER_THAN_EQUAL:
-            return {17, 18};
+            return {18, 17};
         case ast::binary_operator_token_t::EQUAL:
         case ast::binary_operator_token_t::NOT_EQUAL:
-            return {15, 16};
+            return {16, 15};
         case ast::binary_operator_token_t::BITWISE_AND:
-            return {13, 14};
+            return {14, 13};
         case ast::binary_operator_token_t::BITWISE_XOR:
-            return {11, 12};
+            return {12, 11};
         case ast::binary_operator_token_t::BITWISE_OR:
-            return {9, 10};
+            return {10, 9};
         case ast::binary_operator_token_t::LOGICAL_AND:
-            return {7, 8};
+            return {8, 7};
         case ast::binary_operator_token_t::LOGICAL_OR:
-            return {5, 6};
+            return {6, 5};
         case ast::binary_operator_token_t::ASSIGNMENT:
-            return {4, 3}; // right-to-left
+            return {3, 4}; // right-to-left
         case ast::binary_operator_token_t::COMMA:
-            return {1, 2}; // left-to-right
+            return {2, 1}; // left-to-right
     }
     throw std::runtime_error("invalid infix token.");
 }
 std::shared_ptr<ast::binary_expression_t> make_infix_op(const ast::binary_operator_token_t op, ast::expression_t&& lhs, ast::expression_t&& rhs) {
-    return std::make_shared<ast::binary_expression_t>(ast::binary_expression_t{op, std::move(lhs), std::move(rhs)});
+    return std::make_shared<ast::binary_expression_t>(ast::binary_expression_t{op, std::move(lhs), std::move(rhs)}); // we validate this is a valid lvalue in the backend during codegen ast traversal
 }
 ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t precedence) {
-    std::cout << "parse_expression: " << parser.peek_token().token_text << ", " << precedence << std::endl;
     auto lhs = parse_prefix_expression(parser);
 
     for(;;) {
@@ -242,11 +240,9 @@ ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t pre
         }
 
         if(is_postfix_op(parser.peek_token())) {
-            std::cout << "postfix token" << std::endl;
             auto op = parse_postfix_op(parser.peek_token());
             auto post_bp = postfix_binding_power(op);
             if(post_bp < precedence) {
-                std::cout << "(post_bp < precedence)" << std::endl;
                 break;
             }
             parser.advance_token();
@@ -255,11 +251,9 @@ ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t pre
         }
 
         if(is_infix_binary_op(parser.peek_token())) {
-            std::cout << "infix token: " << parser.peek_token().token_text << std::endl;
             auto op = parse_infix_binary_op(parser.peek_token());
             auto [r_bp, l_bp] = infix_binding_power(op);
             if(l_bp < precedence) {
-                std::cout << "(l_bp < precedence)" << std::endl;
                 break;
             }
             parser.advance_token();
