@@ -24,7 +24,6 @@ enum class token_type_t : std::uint32_t {
     LESS_THAN, GREATER_THAN,
     EQUALS,
 
-    // TODO: currently unimplemented in parser, but implemented in lexer
     MODULO,
     BITWISE_AND, BITWISE_OR, BITWISE_XOR,
     BITWISE_LEFT_SHIFT, BITWISE_RIGHT_SHIFT,
@@ -42,7 +41,6 @@ enum class token_type_t : std::uint32_t {
     PLUS_PLUS, DASH_DASH,
 
     // three character lexemes:
-    // TODO: currently unimplemented in parser, but implemented in lexer
     LEFT_SHIFT_EQUALS, RIGHT_SHIFT_EQUALS,
 
     // constants:

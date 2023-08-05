@@ -231,6 +231,47 @@ std::pair<ast::precedence_t, ast::precedence_t> infix_binding_power(const ast::b
 std::shared_ptr<ast::binary_expression_t> make_infix_op(const ast::binary_operator_token_t op, ast::expression_t&& lhs, ast::expression_t&& rhs) {
     return std::make_shared<ast::binary_expression_t>(ast::binary_expression_t{op, std::move(lhs), std::move(rhs)}); // we validate this is a valid lvalue in the backend during codegen ast traversal
 }
+bool is_compound_assignment_op(const token_t& token) {
+    switch(token.token_type) {
+        case token_type_t::PLUS_EQUALS:
+        case token_type_t::MINUS_EQUALS:
+        case token_type_t::TIMES_EQUALS:
+        case token_type_t::DIVIDE_EQUALS:
+        case token_type_t::MODULO_EQUALS:
+        case token_type_t::AND_EQUALS:
+        case token_type_t::OR_EQUALS:
+        case token_type_t::XOR_EQUALS:
+        case token_type_t::LEFT_SHIFT_EQUALS:
+        case token_type_t::RIGHT_SHIFT_EQUALS:
+            return true;
+    }
+    return false;
+}
+ast::binary_operator_token_t get_op_from_compound_assignment_op(const token_t& token) {
+    switch(token.token_type) {
+        case token_type_t::PLUS_EQUALS:
+            return ast::binary_operator_token_t::PLUS;
+        case token_type_t::MINUS_EQUALS:
+            return ast::binary_operator_token_t::MINUS;
+        case token_type_t::TIMES_EQUALS:
+            return ast::binary_operator_token_t::MULTIPLY;
+        case token_type_t::DIVIDE_EQUALS:
+            return ast::binary_operator_token_t::DIVIDE;
+        case token_type_t::MODULO_EQUALS:
+            return ast::binary_operator_token_t::MODULO;
+        case token_type_t::AND_EQUALS:
+            return ast::binary_operator_token_t::BITWISE_AND;
+        case token_type_t::OR_EQUALS:
+            return ast::binary_operator_token_t::BITWISE_OR;
+        case token_type_t::XOR_EQUALS:
+            return ast::binary_operator_token_t::BITWISE_XOR;
+        case token_type_t::LEFT_SHIFT_EQUALS:
+            return ast::binary_operator_token_t::LEFT_BITSHIFT;
+        case token_type_t::RIGHT_SHIFT_EQUALS:
+            return ast::binary_operator_token_t::RIGHT_BITSHIFT;
+    }
+    throw std::runtime_error("invalid compound assignment token.");
+}
 ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t precedence) {
     auto lhs = parse_prefix_expression(parser);
 
@@ -259,6 +300,13 @@ ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t pre
             parser.advance_token();
             auto rhs = parse_expression(parser, r_bp);
             lhs = make_infix_op(op, std::move(lhs), std::move(rhs));
+            continue;
+        }
+
+        if(is_compound_assignment_op(parser.peek_token())) {
+            auto op = get_op_from_compound_assignment_op(parser.peek_token());
+            parser.advance_token();
+            lhs = make_infix_op(ast::binary_operator_token_t::ASSIGNMENT, validate_lvalue_expression_exp(lhs), make_infix_op(op, validate_lvalue_expression_exp(lhs), parse_expression(parser, precedence)));
             continue;
         }
 
