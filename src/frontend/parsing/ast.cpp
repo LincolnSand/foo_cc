@@ -84,6 +84,13 @@ void print_expression(const ast::expression_t& expr) {
             print_expression(unary_exp->exp);
             std::cout << ')';
         },
+        [](const std::shared_ptr<ast::ternary_expression_t>& ternary_exp) -> void {
+            std::cout << "(ternary_exp: ";
+            print_expression(ternary_exp->condition);
+            print_expression(ternary_exp->if_true);
+            print_expression(ternary_exp->if_false);
+            std::cout << ')';
+        },
         [](const ast::constant_t& constant) -> void {
             std::cout << "(constant: ";
             std::cout << constant.value;
@@ -97,6 +104,39 @@ void print_expression(const ast::expression_t& expr) {
     }, expr);
 }
 
+void print_return_statement(const ast::return_statement_t& return_stmt) {
+    std::cout << "(return: ";
+    print_expression(return_stmt.expr);
+    std::cout << ')';
+}
+void print_if_statement(const ast::if_statement_t& if_statement) {
+    std::cout << "(if: ";
+    print_expression(if_statement.if_exp);
+    print_statement(if_statement.if_body);
+    if(if_statement.else_body.has_value()) {
+        std::cout << " else ";
+        print_statement(if_statement.else_body.value());
+    }
+    std::cout << ')';
+}
+void print_statement(const ast::statement_t& stmt) {
+    std::visit(overloaded{
+        [](const ast::return_statement_t& stmt) {
+            print_return_statement(stmt);
+        },
+        [](const ast::expression_t& stmt) {
+            print_expression(stmt);
+        },
+        [](const std::shared_ptr<ast::if_statement_t>& stmt) {
+            print_if_statement(*stmt);
+        },
+        [](const std::shared_ptr<ast::compound_statement_t>& stmt) {
+            print_compound_statement(*stmt);
+        }
+    }, stmt);
+    std::cout << '\n';
+}
+
 void print_declaration(const ast::declaration_t& declaration) {
     std::cout << "(declaration: ";
     std::cout << declaration.var_name;
@@ -105,33 +145,32 @@ void print_declaration(const ast::declaration_t& declaration) {
         print_expression(declaration.value.value());
     }
     std::cout << ')';
+    std::cout << '\n';
 }
-void print_return_stmt(const ast::return_statement_t& return_stmt) {
-    std::cout << "(return: ";
-    print_expression(return_stmt.expr);
-    std::cout << ')';
-}
-void print_stmt(const ast::statement_t& stmt) {
-    std::visit(overloaded{
-        [](const ast::return_statement_t& stmt) {
-            print_return_stmt(stmt);
-        },
-        [](const ast::declaration_t& stmt) {
-            print_declaration(stmt);
-        },
-        [](const ast::expression_t& stmt) {
-            print_expression(stmt);
-        }
-    }, stmt);
-}
-void print_func_decl(const ast::function_declaration_t& func_decl) {
-    std::cout << "(" << func_decl.func_name << ": ";
-    for(const auto& stmt : func_decl.statements) {
-        print_stmt(stmt);
+void print_compound_statement(const ast::compound_statement_t& declaration_statement) {
+    for(const auto& stmt : declaration_statement.stmts) {
+        std::visit(overloaded{
+            [](const ast::statement_t& stmt) {
+                print_statement(stmt);
+            },
+            [](const ast::declaration_t& declaration) {
+                print_declaration(declaration);
+            }
+        }, stmt);
     }
+}
+void print_function_decl(const ast::function_declaration_t& function_declaration) {
+    std::cout << "(" << function_declaration.func_name << ": ";
+    print_compound_statement(function_declaration.statements);
     std::cout << ')';
 }
+
 void print_ast(const ast::program_t& program) {
-    print_func_decl(program.function_declaration);
+    for(const auto& declaration : program.declarations) {
+        print_declaration(declaration);
+    }
+    for(const auto& function_declaration : program.function_declarations) {
+        print_function_decl(function_declaration);
+    }
     std::cout << '\n';
 }

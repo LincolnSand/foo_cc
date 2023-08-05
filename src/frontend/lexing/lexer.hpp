@@ -23,6 +23,7 @@ enum class token_type_t : std::uint32_t {
     PLUS, ASTERISK, SLASH,
     LESS_THAN, GREATER_THAN,
     EQUALS,
+    QUESTION_MARK, COLON,
 
     MODULO,
     BITWISE_AND, BITWISE_OR, BITWISE_XOR,
@@ -49,6 +50,7 @@ enum class token_type_t : std::uint32_t {
     // reserved:
     INT_KEYWORD,
     RETURN_KEYWORD,
+    IF_KEYWORD, ELSE_KEYWORD,
 
     // special:
     // have to use `EOF_TOK` since `EOF` is a macro in C/C++

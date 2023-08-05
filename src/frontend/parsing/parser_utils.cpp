@@ -13,15 +13,6 @@ ast::var_name_t validate_lvalue_expression_exp(const ast::expression_t& expr) {
         [](const std::shared_ptr<ast::grouping_t>& grouping) -> ast::var_name_t {
             return validate_lvalue_expression_exp(grouping->expr);
         },
-        [](const std::shared_ptr<ast::binary_expression_t>& binary_exp) -> ast::var_name_t {
-            switch(binary_exp->op) {
-                case ast::binary_operator_token_t::ASSIGNMENT:
-                    return validate_lvalue_expression_exp(binary_exp->left);
-                case ast::binary_operator_token_t::COMMA:
-                    return validate_lvalue_expression_exp(binary_exp->right);
-            }
-            throw std::runtime_error("Cannot assign to binary operator of type [" + std::to_string(static_cast<std::uint16_t>(binary_exp->op)) + "].");
-        },
         [](const std::shared_ptr<ast::unary_expression_t>& unary_exp) -> ast::var_name_t {
             switch(unary_exp->op) {
                 case ast::unary_operator_token_t::PLUS_PLUS:
@@ -31,6 +22,20 @@ ast::var_name_t validate_lvalue_expression_exp(const ast::expression_t& expr) {
                     }
             }
             throw std::runtime_error("Cannot assign to unary operator of type [" + std::to_string(static_cast<std::uint16_t>(unary_exp->op)) + "].");
+            return "";
+        },
+        [](const std::shared_ptr<ast::binary_expression_t>& binary_exp) -> ast::var_name_t {
+            switch(binary_exp->op) {
+                case ast::binary_operator_token_t::ASSIGNMENT:
+                    return validate_lvalue_expression_exp(binary_exp->left);
+                case ast::binary_operator_token_t::COMMA:
+                    return validate_lvalue_expression_exp(binary_exp->right);
+            }
+            throw std::runtime_error("Cannot assign to binary operator of type [" + std::to_string(static_cast<std::uint16_t>(binary_exp->op)) + "].");
+        },
+        // TODO: support lvalue ternary expressions. Currently only rvalue ternary expressions are supported.
+        [](const std::shared_ptr<ast::ternary_expression_t>& ternary_exp) -> ast::var_name_t {
+            throw std::runtime_error("Cannot assign to ternary operator.");
             return "";
         },
         [](const ast::constant_t& constant) -> ast::var_name_t {

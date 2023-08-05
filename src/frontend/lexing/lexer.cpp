@@ -30,8 +30,16 @@ token_type_t handle_keywords(lexer_t& lexer) {
     }
 
     switch(lexer.start[0]) {
+        case 'e':
+            return match_keyword(lexer, 1, "lse", token_type_t::ELSE_KEYWORD);
         case 'i':
-            return match_keyword(lexer, 1, "nt", token_type_t::INT_KEYWORD);
+            switch(lexer.start[1]) {
+                case 'f':
+                    return match_keyword(lexer, 2, "", token_type_t::IF_KEYWORD);
+                case 'n':
+                    return match_keyword(lexer, 2, "t", token_type_t::INT_KEYWORD);
+            }
+            break;
         case 'r':
             return match_keyword(lexer, 1, "eturn", token_type_t::RETURN_KEYWORD);
     }
@@ -234,6 +242,10 @@ token_t scan_token(lexer_t& lexer) {
             return lexer.make_token(token_type_t::BITWISE_XOR);
         case ',':
             return lexer.make_token(token_type_t::COMMA);
+        case '?':
+            return lexer.make_token(token_type_t::QUESTION_MARK);
+        case ':':
+            return lexer.make_token(token_type_t::COLON);
     }
 
     std::cout << "Unrecognized token: " << c << "\n";

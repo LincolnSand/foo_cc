@@ -29,7 +29,6 @@ std::shared_ptr<ast::grouping_t> parse_grouping(parser_t& parser) {
     return make_grouping(std::move(exp));
 }
 
-
 bool is_prefix_op(const token_t& token) {
     switch(token.token_type) {
         case token_type_t::PLUS_PLUS:
@@ -67,7 +66,7 @@ ast::precedence_t prefix_binding_power(const ast::unary_operator_token_t token) 
         case ast::unary_operator_token_t::MINUS:
         case ast::unary_operator_token_t::LOGICAL_NOT:
         case ast::unary_operator_token_t::BITWISE_NOT:
-            return 25;
+            return 27;
     }
     throw std::runtime_error("invalid prefix token.");
 }
@@ -113,7 +112,7 @@ ast::precedence_t postfix_binding_power(const ast::unary_operator_token_t token)
     switch(token) {
         case ast::unary_operator_token_t::PLUS_PLUS:
         case ast::unary_operator_token_t::MINUS_MINUS:
-            return 26;
+            return 28;
     }
     throw std::runtime_error("invalid postfix token.");
 }
@@ -196,31 +195,31 @@ std::pair<ast::precedence_t, ast::precedence_t> infix_binding_power(const ast::b
         case ast::binary_operator_token_t::MULTIPLY:
         case ast::binary_operator_token_t::DIVIDE:
         case ast::binary_operator_token_t::MODULO:
-            return {24, 23};
+            return {26, 25};
         case ast::binary_operator_token_t::PLUS:
         case ast::binary_operator_token_t::MINUS:
-            return {22, 21};
+            return {24, 23};
         case ast::binary_operator_token_t::LEFT_BITSHIFT:
         case ast::binary_operator_token_t::RIGHT_BITSHIFT:
-            return {20, 19};
+            return {22, 21};
         case ast::binary_operator_token_t::LESS_THAN:
         case ast::binary_operator_token_t::LESS_THAN_EQUAL:
         case ast::binary_operator_token_t::GREATER_THAN:
         case ast::binary_operator_token_t::GREATER_THAN_EQUAL:
-            return {18, 17};
+            return {20, 19};
         case ast::binary_operator_token_t::EQUAL:
         case ast::binary_operator_token_t::NOT_EQUAL:
-            return {16, 15};
+            return {18, 17};
         case ast::binary_operator_token_t::BITWISE_AND:
-            return {14, 13};
+            return {16, 15};
         case ast::binary_operator_token_t::BITWISE_XOR:
-            return {12, 11};
+            return {14, 13};
         case ast::binary_operator_token_t::BITWISE_OR:
-            return {10, 9};
+            return {12, 11};
         case ast::binary_operator_token_t::LOGICAL_AND:
-            return {8, 7};
+            return {10, 9};
         case ast::binary_operator_token_t::LOGICAL_OR:
-            return {6, 5};
+            return {8, 7};
         case ast::binary_operator_token_t::ASSIGNMENT:
             return {3, 4}; // right-to-left
         case ast::binary_operator_token_t::COMMA:
@@ -272,6 +271,9 @@ ast::binary_operator_token_t get_op_from_compound_assignment_op(const token_t& t
     }
     throw std::runtime_error("invalid compound assignment token.");
 }
+std::pair<ast::precedence_t, ast::precedence_t> ternary_binding_power() {
+    return {5, 6}; // right-to-left
+}
 ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t precedence) {
     auto lhs = parse_prefix_expression(parser);
 
@@ -310,6 +312,24 @@ ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t pre
             continue;
         }
 
+        if(parser.peek_token().token_type == token_type_t::QUESTION_MARK) {
+            // TODO: double check that the associativity and precedence are correct for ternary expressions
+            auto [r_bp, l_bp] = ternary_binding_power();
+            if(l_bp < precedence) {
+                break;
+            }
+            parser.advance_token();
+            auto if_true = parse_expression(parser, precedence);
+            if(parser.peek_token().token_type != token_type_t::COLON) {
+                std::cout << parser.peek_token().token_text << std::endl;
+                throw std::runtime_error("expected `:` in ternary expression");
+            }
+            parser.advance_token();
+            auto if_false = parse_expression(parser, 28);
+            lhs = std::make_shared<ast::ternary_expression_t>(ast::ternary_expression_t{std::move(lhs), std::move(if_true), std::move(if_false)});
+            continue;
+        }
+
         break;
     }
 
@@ -319,6 +339,82 @@ ast::expression_t parse_expression(parser_t& parser) {
     return parse_expression(parser, 0u);
 }
 
+ast::return_statement_t parse_return_statement(parser_t& parser) {
+    const auto keyword_token = parser.advance_token();
+    if(keyword_token.token_type != token_type_t::RETURN_KEYWORD) {
+        throw std::runtime_error("expected `return` keyword in statement");
+    }
+
+    auto expression = parse_expression(parser);
+
+    const auto semicolon_token = parser.advance_token();
+    if(semicolon_token.token_type != token_type_t::SEMICOLON) {
+        throw std::runtime_error("expected `;` in statement");
+    }
+
+    return ast::return_statement_t{std::move(expression)};
+}
+ast::expression_t parse_expression_statement(parser_t& parser) {
+    auto expression = parse_expression(parser);
+
+    const auto semicolon_token = parser.advance_token();
+    if(semicolon_token.token_type != token_type_t::SEMICOLON) {
+        throw std::runtime_error("expected `;` in statement");
+    }
+
+    return expression;
+}
+ast::if_statement_t parse_if_statement(parser_t& parser) {
+    const auto if_keyword_token = parser.advance_token();
+    if(if_keyword_token.token_type != token_type_t::IF_KEYWORD) {
+        throw std::runtime_error("expected `if` keyword in statement");
+    }
+
+    const auto left_paren_token = parser.advance_token();
+    if(left_paren_token.token_type != token_type_t::LEFT_PAREN) {
+        throw std::runtime_error("expected `(` in statement");
+    }
+
+    auto if_exp = parse_expression(parser);
+
+    const auto right_paren_token = parser.advance_token();
+    if(right_paren_token.token_type != token_type_t::RIGHT_PAREN) {
+        throw std::runtime_error("expected `)` in statement");
+    }
+
+    ast::statement_t if_body;
+    if(parser.peek_token().token_type == token_type_t::LEFT_CURLY) {
+        if_body = std::make_shared<ast::compound_statement_t>(parse_compound_statement(parser));
+    } else {
+        if_body = parse_statement(parser);
+    }
+
+    if(parser.peek_token().token_type != token_type_t::ELSE_KEYWORD) {
+        return ast::if_statement_t{std::move(if_exp), std::move(if_body), std::nullopt};
+    }
+
+    parser.advance_token();
+
+    if(parser.peek_token().token_type == token_type_t::LEFT_CURLY) {
+        return ast::if_statement_t{std::move(if_exp), std::move(if_body), std::make_shared<ast::compound_statement_t>(parse_compound_statement(parser))};
+    } else {
+        return ast::if_statement_t{std::move(if_exp), std::move(if_body), parse_statement(parser)};
+    }
+}
+ast::statement_t parse_statement(parser_t& parser) {
+    if(parser.is_eof()) {
+        throw std::runtime_error("unexpected end of file");
+    }
+
+    if(parser.peek_token().token_type == token_type_t::RETURN_KEYWORD) {
+        return parse_return_statement(parser);
+    } else if(parser.peek_token().token_type == token_type_t::IF_KEYWORD) {
+        return std::make_shared<ast::if_statement_t>(parse_if_statement(parser));
+    } else if(parser.peek_token().token_type == token_type_t::LEFT_CURLY) {
+        return std::make_shared<ast::compound_statement_t>(parse_compound_statement(parser));
+    }
+    return parse_expression_statement(parser);
+}
 
 ast::declaration_t parse_declaration(parser_t& parser) {
     if(parser.advance_token().token_type != token_type_t::INT_KEYWORD) {
@@ -331,44 +427,53 @@ ast::declaration_t parse_declaration(parser_t& parser) {
     }
 
     if(parser.peek_token().token_type != token_type_t::EQUALS) {
-        return ast::declaration_t{ast::var_name_t(identifier_token.token_text), std::nullopt};
+        auto ret = ast::declaration_t{ast::var_name_t(identifier_token.token_text), std::nullopt};
+
+        const auto semicolon_token = parser.advance_token();
+        if(semicolon_token.token_type != token_type_t::SEMICOLON) {
+            throw std::runtime_error("expected `;` in statement");
+        }
+
+        return ret;
     }
 
     parser.advance_token(); // consume `=` token
 
-    return ast::declaration_t{ast::var_name_t(identifier_token.token_text), parse_expression(parser)};
-}
-ast::return_statement_t parse_return_statement(parser_t& parser) {
-    const auto keyword_token = parser.advance_token();
-    if(keyword_token.token_type != token_type_t::RETURN_KEYWORD) {
-        throw std::runtime_error("expected `return` keyword in statement");
-    }
-
-    auto expression = parse_expression(parser);
-
-    return ast::return_statement_t{std::move(expression)};
-}
-static ast::statement_t parse_statement_helper(parser_t& parser) {
-    if(parser.peek_token().token_type == token_type_t::RETURN_KEYWORD) {
-        return parse_return_statement(parser);
-    } else if(parser.peek_token().token_type == token_type_t::INT_KEYWORD) {
-        return parse_declaration(parser);
-    }
-    return parse_expression(parser);
-}
-ast::statement_t parse_statement(parser_t& parser) {
-    if(parser.is_eof()) {
-        throw std::runtime_error("unexpected end of file");
-    }
-
-    ast::statement_t statement = parse_statement_helper(parser);
+    auto ret = ast::declaration_t{ast::var_name_t(identifier_token.token_text), parse_expression(parser)};
 
     const auto semicolon_token = parser.advance_token();
     if(semicolon_token.token_type != token_type_t::SEMICOLON) {
-        throw std::runtime_error("expected `;` in statement");
+        throw std::runtime_error("Expected `;` in statement.");
     }
 
-    return statement;
+    return ret;
+}
+ast::compound_statement_t parse_compound_statement(parser_t& parser) {
+    if(parser.is_eof()) {
+        throw std::runtime_error("Unexpected end of file.");
+    }
+
+    if(parser.peek_token().token_type != token_type_t::LEFT_CURLY) {
+        throw std::runtime_error("Expected `{` in statement.");
+    }
+    parser.advance_token(); // consume `{` token
+
+    ast::compound_statement_t ret{};
+
+    while(parser.peek_token().token_type != token_type_t::RIGHT_CURLY) {
+        if(parser.is_eof()) {
+            throw std::runtime_error("Unexpected end of file. Unterminated compound statement.");
+        }
+
+        if(parser.peek_token().token_type == token_type_t::INT_KEYWORD) {
+            ret.stmts.push_back(parse_declaration(parser));
+        } else {
+            ret.stmts.push_back(parse_statement(parser));
+        }
+    }
+    parser.advance_token(); // consume `}` token
+
+    return ret;
 }
 ast::function_declaration_t parse_function_decl(parser_t& parser) {
     const auto keyword_token = parser.advance_token();
@@ -391,31 +496,17 @@ ast::function_declaration_t parse_function_decl(parser_t& parser) {
         throw std::runtime_error("expected `)` in function declaration");
     }
 
-    auto curly_token = parser.advance_token();
-    if(curly_token.token_type != token_type_t::LEFT_CURLY) {
-        std::printf("Unexpected token: [%.*s] with type [%d]\n", curly_token.token_text.length(), curly_token.token_text.data(), curly_token.token_type);
-        throw std::runtime_error("expected `{` in function declaration");
-    }
-
-    std::vector<ast::statement_t> statements;
-
-    while(!parser.is_eof() && parser.peek_token().token_type != token_type_t::RIGHT_CURLY) {
-        statements.push_back(parse_statement(parser));
-    }
+    ast::compound_statement_t statements = parse_compound_statement(parser);
 
     // TODO: check if the function identifier is `main` first for when we add support for other functions
     constexpr std::size_t RETURN_INDEX = 0;
-    if(statements.size() == 0 || statements.at(statements.size() - 1).index() != RETURN_INDEX) {
-        statements.push_back(ast::return_statement_t { ast::expression_t{ast::constant_t{0}} } );
-    }
-
-    curly_token = parser.advance_token();
-    if(curly_token.token_type != token_type_t::RIGHT_CURLY) {
-        throw std::runtime_error("expected `}` in function declaration");
+    if(statements.stmts.size() == 0 || statements.stmts.at(statements.stmts.size() - 1).index() != RETURN_INDEX) {
+        statements.stmts.push_back(ast::return_statement_t { ast::expression_t{ast::constant_t{0}} } );
     }
 
     return ast::function_declaration_t{ std::string(name_token.token_text), std::move(statements) };
 }
+
 ast::program_t parse(parser_t& parser) {
-    return ast::program_t { parse_function_decl(parser) };
+    return ast::program_t { std::vector{parse_function_decl(parser)}, {} };
 }

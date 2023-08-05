@@ -79,9 +79,13 @@ std::shared_ptr<ast::grouping_t> parse_grouping(parser_t& parser);
 ast::expression_t parse_expression(parser_t& parser, ast::precedence_t precedence);
 ast::expression_t parse_expression(parser_t& parser);
 
-// the `;` token for return statements and declarations are consumed in `parse_statement()`, not in the corresponding parsing functions.
-ast::declaration_t parse_declaration(parser_t& parser);
 ast::return_statement_t parse_return_statement(parser_t& parser);
+ast::expression_t parse_expression_statement(parser_t& parser);
+ast::if_statement_t parse_if_statement(parser_t& parser);
 ast::statement_t parse_statement(parser_t& parser);
+
+ast::declaration_t parse_declaration(parser_t& parser);
+ast::compound_statement_t parse_compound_statement(parser_t& parser);
 ast::function_declaration_t parse_function_decl(parser_t& parser);
+
 ast::program_t parse(parser_t& parser);
