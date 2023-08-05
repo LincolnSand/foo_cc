@@ -1,8 +1,6 @@
 #include "compile_operators.hpp"
 
 
-// trashes `rcx`
-// TODO: stop this from trashing `rcx`
 void store_constant(assembly_output_t& assembly_output, const ast::constant_t& constant) {
     assembly_output.output += "movq $" + std::to_string(constant.value) + ", %rcx\n";
     assembly_output.output += "pushq %rcx\n";

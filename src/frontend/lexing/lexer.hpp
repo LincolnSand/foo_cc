@@ -34,7 +34,6 @@ enum class token_type_t : std::uint32_t {
     EQUAL_EQUAL, NOT_EQUAL,
     LESS_THAN_EQUAL, GREATER_THAN_EQUAL,
 
-    // TODO: currently unimplemented in parser, but implemented in lexer
     PLUS_EQUALS, MINUS_EQUALS, TIMES_EQUALS, DIVIDE_EQUALS,
     MODULO_EQUALS,
     AND_EQUALS, OR_EQUALS, XOR_EQUALS,

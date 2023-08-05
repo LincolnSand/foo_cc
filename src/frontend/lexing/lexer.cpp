@@ -152,7 +152,6 @@ token_t scan_token(lexer_t& lexer) {
             return lexer.make_token(token_type_t::RIGHT_CURLY);
         case ';':
             return lexer.make_token(token_type_t::SEMICOLON);
-        // TODO: disambiguate `-` from `--` and `-=`
         case '-':
             if(lexer.match_char('=')) {
                 return lexer.make_token(token_type_t::MINUS_EQUALS);
@@ -162,7 +161,6 @@ token_t scan_token(lexer_t& lexer) {
             return lexer.make_token(token_type_t::DASH);
         case '~':
             return lexer.make_token(token_type_t::TILDE);
-        // TODO: disambiguate `!` from `!=`
         case '!':
             if(lexer.match_char('=')) {
                 return lexer.make_token(token_type_t::NOT_EQUAL);
