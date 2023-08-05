@@ -10,7 +10,7 @@ void generate_binary_operation(assembly_output_t& assembly_output, const ast::bi
 void generate_logical_and(assembly_output_t& assembly_output, const ast::binary_expression_t& binary_exp) {
     generate_expression(assembly_output, binary_exp.left);
 
-    pop_constant(assembly_output, "rax");
+    pop_register(assembly_output, "rax");
 
     assembly_output.output += "cmpq $0, %rax\n";
     std::string clause_2_label_name = "_clause2_" + std::to_string(assembly_output.current_label_number++);
@@ -24,7 +24,7 @@ void generate_logical_and(assembly_output_t& assembly_output, const ast::binary_
     assembly_output.output += clause_2_label_name + ":\n";
 
     generate_expression(assembly_output, binary_exp.right);
-    pop_constant(assembly_output, "rax");
+    pop_register(assembly_output, "rax");
 
     assembly_output.output += "cmpq $0, %rax\n";
     assembly_output.output += "movq $0, %rax\n";
@@ -36,7 +36,7 @@ void generate_logical_and(assembly_output_t& assembly_output, const ast::binary_
 void generate_logical_or(assembly_output_t& assembly_output, const ast::binary_expression_t& binary_exp) {
     generate_expression(assembly_output, binary_exp.left);
 
-    pop_constant(assembly_output, "rax");
+    pop_register(assembly_output, "rax");
 
     assembly_output.output += "cmpq $0, %rax\n";
     std::string clause_2_label_name = "_clause2_" + std::to_string(assembly_output.current_label_number++);
@@ -50,7 +50,7 @@ void generate_logical_or(assembly_output_t& assembly_output, const ast::binary_e
     assembly_output.output += clause_2_label_name + ":\n";
 
     generate_expression(assembly_output, binary_exp.right);
-    pop_constant(assembly_output, "rax");
+    pop_register(assembly_output, "rax");
 
     assembly_output.output += "cmpq $0, %rax\n";
     assembly_output.output += "movq $0, %rax\n";
@@ -67,7 +67,7 @@ void generate_assignment_expression(assembly_output_t& assembly_output, const as
 
     generate_expression(assembly_output, assignment.right);
 
-    pop_constant(assembly_output, "rax");
+    pop_register(assembly_output, "rax");
     store_variable(assembly_output, var_name, "rax");
     store_register(assembly_output, "rax"); // return variable so it can be used in expressions (e.g. assignment chaining)
 }

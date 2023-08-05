@@ -26,7 +26,7 @@ ast::var_name_t validate_lvalue_expression_exp(const ast::expression_t& expr) {
             switch(unary_exp->op) {
                 case ast::unary_operator_token_t::PLUS_PLUS:
                 case ast::unary_operator_token_t::MINUS_MINUS:
-                    if(unary_exp->fixity == ast::unary_operator_fixity_t::POSTFIX) {
+                    if(unary_exp->fixity == ast::unary_operator_fixity_t::PREFIX) {
                         return validate_lvalue_expression_exp(unary_exp->exp);
                     }
             }

@@ -13,7 +13,7 @@ void generate_binary_expression(assembly_output_t& assembly_output, const ast::b
             generate_binary_operation(assembly_output, binary_exp, &generate_division);
             return;
         case ast::binary_operator_token_t::MODULO:
-            //generate_binary_operation(assembly_output, binary_exp, &generate_modulo);
+            generate_binary_operation(assembly_output, binary_exp, &generate_modulo);
             return;
         case ast::binary_operator_token_t::PLUS:
             generate_binary_operation(assembly_output, binary_exp, &generate_addition);
@@ -22,10 +22,10 @@ void generate_binary_expression(assembly_output_t& assembly_output, const ast::b
             generate_binary_operation(assembly_output, binary_exp, &generate_subtraction);
             return;
         case ast::binary_operator_token_t::LEFT_BITSHIFT:
-            //generate_binary_operation(assembly_output, binary_exp, &generate_left_bitshift);
+            generate_binary_operation(assembly_output, binary_exp, &generate_left_bitshift);
             return;
         case ast::binary_operator_token_t::RIGHT_BITSHIFT:
-            //generate_binary_operation(assembly_output, binary_exp, &generate_right_bitshift);
+            generate_binary_operation(assembly_output, binary_exp, &generate_right_bitshift);
             return;
         case ast::binary_operator_token_t::LESS_THAN:
             generate_binary_operation(assembly_output, binary_exp, &generate_less_than);
@@ -46,13 +46,13 @@ void generate_binary_expression(assembly_output_t& assembly_output, const ast::b
             generate_binary_operation(assembly_output, binary_exp, &generate_not_equals);
             return;
         case ast::binary_operator_token_t::BITWISE_AND:
-            //generate_binary_operation(assembly_output, binary_exp, &generate_bitwise_and);
+            generate_binary_operation(assembly_output, binary_exp, &generate_bitwise_and);
             return;
         case ast::binary_operator_token_t::BITWISE_XOR:
-            //generate_binary_operation(assembly_output, binary_exp, &generate_bitwise_xor);
+            generate_binary_operation(assembly_output, binary_exp, &generate_bitwise_xor);
             return;
         case ast::binary_operator_token_t::BITWISE_OR:
-            //generate_binary_operation(assembly_output, binary_exp, &generate_bitwise_or);
+            generate_binary_operation(assembly_output, binary_exp, &generate_bitwise_or);
             return;
         case ast::binary_operator_token_t::LOGICAL_AND:
             generate_logical_and(assembly_output, binary_exp);
@@ -73,13 +73,14 @@ void generate_unary_expression(assembly_output_t& assembly_output, const ast::un
     if(unary_exp.fixity == ast::unary_operator_fixity_t::PREFIX) {
         switch(unary_exp.op) {
             case ast::unary_operator_token_t::PLUS_PLUS:
-                //generate_unary_operation(assembly_output, unary_exp, &generate_prefix_plus_plus);
+                generate_prefix_plus_plus(assembly_output, unary_exp);
                 return;
             case ast::unary_operator_token_t::MINUS_MINUS:
-                //generate_unary_operation(assembly_output, unary_exp, &generate_prefix_minus_minus);
+                generate_prefix_minus_minus(assembly_output, unary_exp);
                 return;
             case ast::unary_operator_token_t::PLUS:
-                //generate_unary_operation(assembly_output, unary_exp, &generate_unary_plus);
+                // since number literals default to positive anyways, the unary plus operator is purely a decorative prefix and is otherwise ignored in codegen
+                generate_expression(assembly_output, unary_exp.exp);
                 return;
             case ast::unary_operator_token_t::MINUS:
                 generate_unary_operation(assembly_output, unary_exp, &generate_negation);
@@ -95,10 +96,10 @@ void generate_unary_expression(assembly_output_t& assembly_output, const ast::un
     } else if(unary_exp.fixity == ast::unary_operator_fixity_t::POSTFIX) {
         switch(unary_exp.op) {
             case ast::unary_operator_token_t::PLUS_PLUS:
-                //generate_unary_operation(assembly_output, unary_exp, &generate_postfix_plus_plus);
+                generate_postfix_plus_plus(assembly_output, unary_exp);
                 return;
             case ast::unary_operator_token_t::MINUS_MINUS:
-                //generate_unary_operation(assembly_output, unary_exp, &generate_postfix_minus_minus);
+                generate_postfix_minus_minus(assembly_output, unary_exp);
                 return;
         }
         throw std::runtime_error("invalid unary postfix operator.");
@@ -139,14 +140,14 @@ void generate_decl(assembly_output_t& assembly_output, const ast::declaration_t&
     if(decl.value.has_value()) {
         generate_expression(assembly_output, *decl.value);
 
-        pop_constant(assembly_output, "rax");
+        pop_register(assembly_output, "rax");
         store_variable(assembly_output, decl.var_name, "rax");
     }
 }
 void generate_return_stmt(assembly_output_t& assembly_output, const ast::return_statement_t& return_stmt) {
     generate_expression(assembly_output, return_stmt.expr);
 
-    pop_constant(assembly_output, "rax");
+    pop_register(assembly_output, "rax");
 
     generate_function_epilogue(assembly_output);
 }
