@@ -20,7 +20,7 @@ void generate_if_statement(assembly_output_t& assembly_output, const ast::if_sta
 void generate_statement(assembly_output_t& assembly_output, const ast::statement_t& stmt);
 
 void generate_declaration(assembly_output_t& assembly_output, const ast::declaration_t& decl);
-void generate_compound_statement(assembly_output_t& assembly_output, const ast::compound_statement_t& compound_stmt);
+void generate_compound_statement(assembly_output_t& assembly_output, const ast::compound_statement_t& compound_stmt, bool is_function = false);
 void generate_function_decl(assembly_output_t& assembly_output, const ast::function_declaration_t& function);
 
 void generate_program(assembly_output_t& assembly_output, const ast::program_t& program);

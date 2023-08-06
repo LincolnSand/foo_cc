@@ -73,27 +73,34 @@ public:
     }
 };
 
+using rbp_offset_t = std::uint64_t;
+struct block_scope_t {
+    std::unordered_map<std::string, rbp_offset_t> variables;
+
+    // current offset from what the `rsp` was at the beginning/creation of the current block scope (i.e. how much to increment `rsp` by once this block scope ends).
+    std::uint64_t stack_size = 0u;
+};
 class variable_lookup_t {
-    random_access_stack_t<std::unordered_map<std::string, std::uint64_t>> variables;
+    random_access_stack_t<block_scope_t> scopes;
 
 public:
     variable_lookup_t() = default;
 
     bool contains_in_lowest_scope(const std::string& variable_name) const {
-        return variables.peek().find(variable_name) != variables.peek().end();
+        return scopes.peek().variables.find(variable_name) != scopes.peek().variables.end();
     }
     bool contains_in_accessible_scopes(const std::string& variable_name) {
-        for(std::uint32_t i = 0u; i < variables.size(); ++i) {
-            if(variables.at(i).find(variable_name) != variables.at(i).end()) {
+        for(std::uint32_t i = 0u; i < scopes.size(); ++i) {
+            if(scopes.at(i).variables.find(variable_name) != scopes.at(i).variables.end()) {
                 return true;
             }
         }
         return false;
     }
     std::optional<std::uint64_t> find_from_lowest_scope(const std::string& variable_name) {
-        for(std::uint32_t i = variables.last_index(); i < variables.size(); --i) { // iterate backwards so we start in lowest level scope and use `i < variables.size()` so we handle unsigned integer underflow for `i`.
-            auto it = variables.at(i).find(variable_name);
-            if(it != variables.at(i).end()) {
+        for(std::uint32_t i = scopes.last_index(); i < scopes.size(); --i) { // iterate backwards so we start in lowest level scope and use `i < variables.size()` so we handle unsigned integer underflow for `i`.
+            auto it = scopes.at(i).variables.find(variable_name);
+            if(it != scopes.at(i).variables.end()) {
                 return it->second; // returns the variable ebp offset for the lowest scope level variable with this name. This means we properly handle variable shadowing.
             }
         }
@@ -101,21 +108,22 @@ public:
     }
 
     void add_new_variable_in_current_scope(const std::string& variable_name, const std::uint64_t ebp_offset) {
-        variables.peek().insert({variable_name, ebp_offset});
+        scopes.peek().variables.insert({variable_name, ebp_offset});
+        scopes.peek().stack_size += sizeof(std::uint64_t); // TODO: we currently only support 64 bit integer type
     }
 
     const std::unordered_map<std::string, std::uint64_t>& get_current_lowest_scope() const {
-        return variables.peek();
+        return scopes.peek().variables;
     }
     std::unordered_map<std::string, std::uint64_t>& get_current_lowest_scope() {
-        return variables.peek();
+        return scopes.peek().variables;
     }
 
     void create_new_scope() {
-        variables.push(std::unordered_map<std::string, std::uint64_t>{});
+        scopes.push(block_scope_t{});
     }
-    void destroy_current_scope() {
-        variables.pop();
+    std::uint64_t destroy_current_scope() {
+        return scopes.pop().stack_size;
     }
 };
 }

@@ -192,8 +192,8 @@ void generate_declaration(assembly_output_t& assembly_output, const ast::declara
         throw std::runtime_error("Variable " + decl.var_name + " already declared in current scope.");
     }
 
-    // start off at `8` instead of `0` since we read from low to high memory address and we negate the offset from ebp in the emited code, so the first byte is `-8` and the range is [-8, 0) instead of [0, -8).
-    assembly_output.variable_lookup.add_new_variable_in_current_scope(decl.var_name, (assembly_output.current_ebp_offset += 8));
+    // start off at `sizeof(std::uint64_t)` instead of `0` since we read from low to high memory address and we negate the offset from ebp in the emited code, so the first byte is `-8` and the range is [-8, 0) instead of [0, -8).
+    assembly_output.variable_lookup.add_new_variable_in_current_scope(decl.var_name, (assembly_output.current_ebp_offset += sizeof(std::uint64_t))); // TODO: we currently only support 64 bit integer type
 
     allocate_stack_space_for_variable(assembly_output);
 
@@ -204,7 +204,7 @@ void generate_declaration(assembly_output_t& assembly_output, const ast::declara
         store_variable(assembly_output, decl.var_name, "rax");
     }
 }
-void generate_compound_statement(assembly_output_t& assembly_output, const ast::compound_statement_t& compound_stmt) {
+void generate_compound_statement(assembly_output_t& assembly_output, const ast::compound_statement_t& compound_stmt, const bool is_function) {
     assembly_output.variable_lookup.create_new_scope();
 
     for(const auto& stmt : compound_stmt.stmts) {
@@ -218,7 +218,12 @@ void generate_compound_statement(assembly_output_t& assembly_output, const ast::
         }, stmt);
     }
 
-    assembly_output.variable_lookup.destroy_current_scope();
+    const auto rsp_offset = assembly_output.variable_lookup.destroy_current_scope();
+    if(!is_function) {
+        // no need to emit code after the last `ret` in a function as it is unreachable anyways
+        assembly_output.output += "addq $" + std::to_string(rsp_offset) + ", %rsp\n";
+    }
+    assembly_output.current_ebp_offset -= rsp_offset;
 }
 void generate_function_decl(assembly_output_t& assembly_output, const ast::function_declaration_t& function) {
     assembly_output.output += ".globl ";
@@ -229,7 +234,7 @@ void generate_function_decl(assembly_output_t& assembly_output, const ast::funct
 
     generate_function_prologue(assembly_output);
 
-    generate_compound_statement(assembly_output, function.statements);
+    generate_compound_statement(assembly_output, function.statements, true);
 }
 
 void generate_program(assembly_output_t& assembly_output, const ast::program_t& program) {
