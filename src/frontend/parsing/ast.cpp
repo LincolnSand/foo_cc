@@ -16,7 +16,7 @@ const char* get_unary_op_name(const ast::unary_operator_token_t op) {
         case ast::unary_operator_token_t::BITWISE_NOT:
             return "~";
     }
-    throw std::runtime_error("invalid unary operator.");
+    throw std::runtime_error("Invalid unary operator.");
 }
 const char* get_binary_op_name(const ast::binary_operator_token_t op) {
     switch(op) {
@@ -61,7 +61,7 @@ const char* get_binary_op_name(const ast::binary_operator_token_t op) {
         case ast::binary_operator_token_t::COMMA:
             return ",";
     }
-    throw std::runtime_error("invalid binary operator.");
+    throw std::runtime_error("Invalid binary operator.");
 }
 
 void print_expression(const ast::expression_t& expr) {
@@ -124,8 +124,10 @@ void print_statement(const ast::statement_t& stmt) {
         [](const ast::return_statement_t& stmt) {
             print_return_statement(stmt);
         },
-        [](const ast::expression_t& stmt) {
-            print_expression(stmt);
+        [](const ast::expression_statement_t& stmt) {
+            if(stmt.expr.has_value()) {
+                print_expression(stmt.expr.value());
+            }
         },
         [](const std::shared_ptr<ast::if_statement_t>& stmt) {
             print_if_statement(*stmt);

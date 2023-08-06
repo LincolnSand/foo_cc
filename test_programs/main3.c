@@ -3,7 +3,11 @@ int main() {
     {
         int a = 7;
         a = 2;
-        return a;
+        //return a;
     }
+    {}
+    ;
+    {};
+    a = 3;
     return a;
 }

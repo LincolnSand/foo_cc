@@ -74,10 +74,13 @@ struct declaration_t {
     var_name_t var_name;
     std::optional<expression_t> value;
 };
+struct expression_statement_t {
+    std::optional<expression_t> expr;
+};
 
 struct if_statement_t;
 struct compound_statement_t;
-using statement_t = std::variant<return_statement_t, expression_t, std::shared_ptr<if_statement_t>, std::shared_ptr<compound_statement_t>>;
+using statement_t = std::variant<return_statement_t, expression_statement_t, std::shared_ptr<if_statement_t>, std::shared_ptr<compound_statement_t>>;
 
 struct compound_statement_t {
     std::vector<std::variant<statement_t, declaration_t>> stmts;

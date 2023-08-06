@@ -70,6 +70,12 @@ struct parser_t {
     token_t advance_token_n(const std::uint32_t lookahead) {
         return tokens.at((current_token_index += lookahead) - 1);
     }
+
+    void expect_token(const token_type_t expected, const char *const error_message) {
+        if(advance_token().token_type != expected) {
+            throw std::runtime_error(error_message);
+        }
+    }
 };
 
 ast::var_name_t parse_var_name(parser_t& parser);
@@ -80,7 +86,7 @@ ast::expression_t parse_expression(parser_t& parser, ast::precedence_t precedenc
 ast::expression_t parse_expression(parser_t& parser);
 
 ast::return_statement_t parse_return_statement(parser_t& parser);
-ast::expression_t parse_expression_statement(parser_t& parser);
+ast::expression_statement_t parse_expression_statement(parser_t& parser);
 ast::if_statement_t parse_if_statement(parser_t& parser);
 ast::statement_t parse_statement(parser_t& parser);
 

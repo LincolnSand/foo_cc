@@ -27,7 +27,7 @@ void generate_unary_expression(assembly_output_t& assembly_output, const ast::un
                 generate_unary_operation(assembly_output, unary_exp, &generate_bitwise_not);
                 return;
         }
-        throw std::runtime_error("invalid prefix unary operator.");
+        throw std::runtime_error("Invalid prefix unary operator.");
     } else if(unary_exp.fixity == ast::unary_operator_fixity_t::POSTFIX) {
         switch(unary_exp.op) {
             case ast::unary_operator_token_t::PLUS_PLUS:
@@ -37,9 +37,9 @@ void generate_unary_expression(assembly_output_t& assembly_output, const ast::un
                 generate_postfix_minus_minus(assembly_output, unary_exp);
                 return;
         }
-        throw std::runtime_error("invalid unary postfix operator.");
+        throw std::runtime_error("Invalid unary postfix operator.");
     } else {
-        throw std::runtime_error("invalid unary operator fixity.");
+        throw std::runtime_error("Invalid unary operator fixity.");
     }
 }
 void generate_binary_expression(assembly_output_t& assembly_output, const ast::binary_expression_t& binary_exp) {
@@ -105,7 +105,7 @@ void generate_binary_expression(assembly_output_t& assembly_output, const ast::b
             generate_binary_operation(assembly_output, binary_exp, &generate_comma);
             return;
     }
-    throw std::runtime_error("invalid binary operator.");
+    throw std::runtime_error("Invalid binary operator.");
 }
 void generate_ternary_expression(assembly_output_t& assembly_output, const ast::ternary_expression_t& ternary_exp) {
     generate_expression(assembly_output, ternary_exp.condition);
@@ -172,11 +172,10 @@ void generate_statement(assembly_output_t& assembly_output, const ast::statement
         [&assembly_output](const ast::return_statement_t& stmt) {
             generate_return_statement(assembly_output, stmt);
         },
-        [&assembly_output](const ast::declaration_t& stmt) {
-            generate_declaration(assembly_output, stmt);
-        },
-        [&assembly_output](const ast::expression_t& stmt) {
-            generate_expression(assembly_output, stmt);
+        [&assembly_output](const ast::expression_statement_t& stmt) {
+            if(stmt.expr.has_value()) {
+                generate_expression(assembly_output, stmt.expr.value());
+            }
         },
         [&assembly_output](const std::shared_ptr<ast::if_statement_t>& stmt) {
             generate_if_statement(assembly_output, *stmt);
