@@ -33,7 +33,7 @@ ast::var_name_t validate_lvalue_expression_exp(const ast::expression_t& expr) {
             }
             throw std::runtime_error("Cannot assign to binary operator of type [" + std::to_string(static_cast<std::uint16_t>(binary_exp->op)) + "].");
         },
-        // TODO: support lvalue ternary expressions. Currently only rvalue ternary expressions are supported.
+        // TODO: Check if C has lvalue ternary expressions. Currently only rvalue ternary expressions are supported. I believe only C++ has lvalue expressions, but I need to double check.
         [](const std::shared_ptr<ast::ternary_expression_t>& ternary_exp) -> ast::var_name_t {
             throw std::runtime_error("Cannot assign to ternary operator.");
             return "";

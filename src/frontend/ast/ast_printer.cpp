@@ -131,7 +131,6 @@ void print_if_statement(const ast::if_statement_t& if_statement) {
     }
     std::cout << ')';
 }
-// TODO: don't print '\n' if it is the last statement in a function body
 void print_statement(const ast::statement_t& stmt, const bool is_last_statement) {
     std::visit(overloaded{
         [is_last_statement](const ast::return_statement_t& stmt) {

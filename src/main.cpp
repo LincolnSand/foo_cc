@@ -26,10 +26,14 @@ int main(int argc, char** argv) {
         std::string file_contents = read_file_into_string(argv[1]);
         lexer_t lexer(file_contents.c_str());
         std::vector<token_t> tokens_list = scan_all_tokens(lexer);
+
         parser_t parser(tokens_list);
         ast::program_t ast = parse(parser);
+
         validate_ast(ast);
+
         print_ast(ast);
+
         //std::string assembly_output = generate_asm(ast);
         //write_string_into_file(assembly_output, out_filename.c_str());
     } else {
