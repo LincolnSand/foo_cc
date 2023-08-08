@@ -38,6 +38,10 @@ ast::var_name_t validate_lvalue_expression_exp(const ast::expression_t& expr) {
             throw std::runtime_error("Cannot assign to ternary operator.");
             return "";
         },
+        [](const std::shared_ptr<ast::function_call_t>& function_call) -> ast::var_name_t {
+            throw std::runtime_error("Cannot assign to function call.");
+            return "";
+        },
         [](const ast::constant_t& constant) -> ast::var_name_t {
             throw std::runtime_error("You cannot assign to a constant.");
             return "";

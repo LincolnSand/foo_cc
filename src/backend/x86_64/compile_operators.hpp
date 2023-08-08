@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <cstdint>
 
-#include <frontend/parsing/ast.hpp>
+#include <frontend/ast/ast.hpp>
 #include <frontend/parsing/parser_utils.hpp>
 #include <utils/data_structures/random_access_stack.hpp>
 
@@ -13,7 +13,7 @@
 struct assembly_output_t  {
     std::string output;
     std::uint64_t current_label_number = 0; // appended to the end of labels so we don't get duplicate labels for things like boolean short circuiting
-    utils::data_structures::variable_lookup_t variable_lookup;
+    utils::data_structures::backend_variable_lookup_t variable_lookup;
     std::uint64_t current_ebp_offset = 0; // appended to `-` symbol since the stack grows downwards on x86_64
 
     assembly_output_t() = default;

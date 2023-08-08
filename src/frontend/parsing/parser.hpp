@@ -6,14 +6,12 @@
 #include <string>
 #include <utility>
 #include <memory>
+#include <cstddef>
 
 #include <frontend/lexing/lexer.hpp>
-#include "ast.hpp"
+#include <frontend/ast/ast.hpp>
 #include "parser_utils.hpp"
 #include <utils/common.hpp>
-
-// debugging:
-#include <cstdio>
 
 
 struct parser_t {
@@ -92,6 +90,6 @@ ast::statement_t parse_statement(parser_t& parser);
 
 ast::declaration_t parse_declaration(parser_t& parser);
 ast::compound_statement_t parse_compound_statement(parser_t& parser);
-ast::function_declaration_t parse_function_decl(parser_t& parser);
+std::variant<ast::function_declaration_t, ast::function_definition_t> parse_function(parser_t& parser);
 
 ast::program_t parse(parser_t& parser);

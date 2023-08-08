@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <charconv>
+#include <unordered_map>
+#include <string_view>
 
 
 template<class... Ts>
@@ -36,5 +38,10 @@ inline bool str_to_int(std::string_view s, T& value) {
     if(result.ptr != s.data() + s.size()) return false;
 
     return true;
+}
+
+template<typename T, typename U>
+inline bool contains(const std::unordered_map<T, U>& map, const T& key) {
+    return map.find(key) != map.end();
 }
 }

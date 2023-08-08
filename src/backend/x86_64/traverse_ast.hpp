@@ -4,7 +4,7 @@
 #include <string>
 #include <stdexcept>
 
-#include <frontend/parsing/ast.hpp>
+#include <frontend/ast/ast.hpp>
 #include "traverse_ast_helpers.hpp"
 
 

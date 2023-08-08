@@ -9,6 +9,8 @@
 #include <string>
 #include <unordered_map>
 
+#include <frontend/ast/ast.hpp>
+
 
 // TODO: support iterators
 namespace utils::data_structures {
@@ -80,11 +82,11 @@ struct block_scope_t {
     // current offset from what the `rsp` was at the beginning/creation of the current block scope (i.e. how much to increment `rsp` by once this block scope ends).
     std::uint64_t stack_size = 0u;
 };
-class variable_lookup_t {
+class backend_variable_lookup_t {
     random_access_stack_t<block_scope_t> scopes;
 
 public:
-    variable_lookup_t() = default;
+    backend_variable_lookup_t() = default;
 
     bool contains_in_lowest_scope(const std::string& variable_name) const {
         return scopes.peek().variables.find(variable_name) != scopes.peek().variables.end();
@@ -107,15 +109,15 @@ public:
         return std::nullopt; // variable with this name not found in any accessible scope
     }
 
-    void add_new_variable_in_current_scope(const std::string& variable_name, const std::uint64_t ebp_offset) {
+    void add_new_variable_in_current_scope(const ast::var_name_t& variable_name, const rbp_offset_t ebp_offset) {
         scopes.peek().variables.insert({variable_name, ebp_offset});
         scopes.peek().stack_size += sizeof(std::uint64_t); // TODO: we currently only support 64 bit integer type
     }
 
-    const std::unordered_map<std::string, std::uint64_t>& get_current_lowest_scope() const {
+    const std::unordered_map<std::string, rbp_offset_t>& get_current_lowest_scope() const {
         return scopes.peek().variables;
     }
-    std::unordered_map<std::string, std::uint64_t>& get_current_lowest_scope() {
+    std::unordered_map<std::string, rbp_offset_t>& get_current_lowest_scope() {
         return scopes.peek().variables;
     }
 
@@ -124,6 +126,35 @@ public:
     }
     std::uint64_t destroy_current_scope() {
         return scopes.pop().stack_size;
+    }
+};
+class validation_variable_lookup_t {
+    random_access_stack_t<std::unordered_map<ast::var_name_t, ast::type_name_t>> variables;
+
+public:
+    validation_variable_lookup_t() = default;
+
+    bool contains_in_lowest_scope(const std::string& variable_name) const {
+        return variables.peek().find(variable_name) != variables.peek().end();
+    }
+    bool contains_in_accessible_scopes(const std::string& variable_name) {
+        for(std::uint32_t i = 0u; i < variables.size(); ++i) {
+            if(variables.at(i).find(variable_name) != variables.at(i).end()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void add_new_variable_in_current_scope(const ast::var_name_t& variable_name, const ast::type_name_t& variable_type) {
+        variables.peek().insert({variable_name, variable_type});
+    }
+
+    void create_new_scope() {
+        variables.push({});
+    }
+    void destroy_current_scope() {
+        variables.pop();
     }
 };
 }

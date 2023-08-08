@@ -1,4 +1,4 @@
-#include "ast.hpp"
+#include "ast_printer.hpp"
 
 
 const char* get_unary_op_name(const ast::unary_operator_token_t op) {
@@ -91,6 +91,18 @@ void print_expression(const ast::expression_t& expr) {
             print_expression(ternary_exp->if_false);
             std::cout << ')';
         },
+        [](const std::shared_ptr<ast::function_call_t>& function_call) -> void {
+            std::cout << "(function call: ";
+            std::cout << function_call->function_name;
+            std::cout << '(';
+            for(auto i = 0; i < function_call->params.size(); ++i) {
+                print_expression(function_call->params[i]);
+                if(i != function_call->params.size() - 1) {
+                    std::cout << ", ";
+                }
+            }
+            std::cout << ')';
+        },
         [](const ast::constant_t& constant) -> void {
             std::cout << "(constant: ";
             std::cout << constant.value;
@@ -119,27 +131,36 @@ void print_if_statement(const ast::if_statement_t& if_statement) {
     }
     std::cout << ')';
 }
-void print_statement(const ast::statement_t& stmt) {
+// TODO: don't print '\n' if it is the last statement in a function body
+void print_statement(const ast::statement_t& stmt, const bool is_last_statement) {
     std::visit(overloaded{
-        [](const ast::return_statement_t& stmt) {
+        [is_last_statement](const ast::return_statement_t& stmt) {
             print_return_statement(stmt);
-        },
-        [](const ast::expression_statement_t& stmt) {
-            if(stmt.expr.has_value()) {
-                print_expression(stmt.expr.value());
+            if(!is_last_statement) {
+                std::cout << '\n';
             }
         },
-        [](const std::shared_ptr<ast::if_statement_t>& stmt) {
+        [is_last_statement](const ast::expression_statement_t& stmt) {
+            if(stmt.expr.has_value()) {
+                print_expression(stmt.expr.value());
+                if(!is_last_statement) {
+                    std::cout << '\n';
+                }
+            }
+        },
+        [is_last_statement](const std::shared_ptr<ast::if_statement_t>& stmt) {
             print_if_statement(*stmt);
+            if(!is_last_statement) {
+                std::cout << '\n';
+            }
         },
         [](const std::shared_ptr<ast::compound_statement_t>& stmt) {
             print_compound_statement(*stmt);
         }
     }, stmt);
-    std::cout << '\n';
 }
 
-void print_declaration(const ast::declaration_t& declaration) {
+void print_declaration(const ast::declaration_t& declaration, const bool is_last_statement) {
     std::cout << "(declaration: ";
     std::cout << declaration.var_name;
     if(declaration.value.has_value()) {
@@ -147,32 +168,58 @@ void print_declaration(const ast::declaration_t& declaration) {
         print_expression(declaration.value.value());
     }
     std::cout << ')';
-    std::cout << '\n';
+    if(!is_last_statement) {
+        std::cout << '\n';
+    }
 }
 void print_compound_statement(const ast::compound_statement_t& declaration_statement) {
-    for(const auto& stmt : declaration_statement.stmts) {
+    for(auto i = 0; i < declaration_statement.stmts.size(); ++i) {
+        const bool is_last_stmt = (i == declaration_statement.stmts.size() - 1);
         std::visit(overloaded{
-            [](const ast::statement_t& stmt) {
-                print_statement(stmt);
+            [is_last_stmt](const ast::statement_t& stmt) {
+                print_statement(stmt, is_last_stmt);
             },
-            [](const ast::declaration_t& declaration) {
-                print_declaration(declaration);
+            [is_last_stmt](const ast::declaration_t& declaration) {
+                print_declaration(declaration, is_last_stmt);
             }
-        }, stmt);
+        }, declaration_statement.stmts[i]);
     }
 }
 void print_function_decl(const ast::function_declaration_t& function_declaration) {
-    std::cout << "(" << function_declaration.func_name << ": ";
-    print_compound_statement(function_declaration.statements);
-    std::cout << ')';
+    std::cout << "(" << function_declaration.function_name << '(';
+    for(auto i = 0; i < function_declaration.params.size(); ++i) {
+        std::cout << function_declaration.params[i].token_text;
+        if(i != function_declaration.params.size() - 1) {
+            std::cout << ", ";
+        }
+    }
+    std::cout << "))\n";
+}
+void print_function_definition(const ast::function_definition_t& function_definition) {
+    std::cout << "(" << function_definition.function_name << '(';
+    for(auto i = 0; i < function_definition.params.size(); ++i) {
+        std::cout << function_definition.params[i].first.token_text;
+        if(function_definition.params[i].second.has_value()) {
+            std::cout << ' ' << function_definition.params[i].second.value();
+        }
+        if(i != function_definition.params.size() - 1) {
+            std::cout << ", ";
+        }
+    }
+    std::cout << "): ";
+    print_compound_statement(function_definition.statements);
+    std::cout << ")\n";
 }
 
 void print_ast(const ast::program_t& program) {
-    for(const auto& declaration : program.declarations) {
-        print_declaration(declaration);
+    for(const auto& e : program.function_declarations) {
+        print_function_decl(e);
     }
-    for(const auto& function_declaration : program.function_declarations) {
-        print_function_decl(function_declaration);
+    for(const auto& e : program.function_definitions) {
+        print_function_definition(e);
+    }
+    for(const auto& e : program.declarations) {
+        print_declaration(e);
     }
     std::cout << '\n';
 }

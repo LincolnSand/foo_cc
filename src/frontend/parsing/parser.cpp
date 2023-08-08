@@ -274,12 +274,38 @@ ast::binary_operator_token_t get_op_from_compound_assignment_op(const token_t& t
 std::pair<ast::precedence_t, ast::precedence_t> ternary_binding_power() {
     return {5, 6}; // right-to-left
 }
+std::string get_identifier_from_expression(const ast::expression_t& expr) {
+    return std::visit(overloaded{
+        [](const ast::var_name_t& var) -> std::string {
+            return std::string(var);
+        },
+        [](const auto&) -> std::string {
+            throw std::runtime_error("Expression is not an identifier.");
+            return std::string("");
+        }
+    }, expr);
+}
 ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t precedence) {
     auto lhs = parse_prefix_expression(parser);
 
     for(;;) {
         if(parser.peek_token().token_type == token_type_t::EOF_TOK) {
             break;
+        }
+
+        if(parser.peek_token().token_type == token_type_t::LEFT_PAREN) {
+            parser.advance_token();
+            std::vector<ast::expression_t> args;
+            while(parser.peek_token().token_type != token_type_t::RIGHT_PAREN) {
+                args.push_back(parse_expression(parser, 3)); // accept all expressions as arguments except for comma operator, so pass precedence of assignment operator lhs
+                if(parser.peek_token().token_type != token_type_t::COMMA) {
+                    break;
+                }
+                parser.advance_token();
+            }
+            parser.expect_token(token_type_t::RIGHT_PAREN, "Expected `)` in function call.");
+            lhs = std::make_shared<ast::function_call_t>(ast::function_call_t{get_identifier_from_expression(lhs), std::move(args)});
+            continue;
         }
 
         if(is_postfix_op(parser.peek_token())) {
@@ -400,7 +426,8 @@ ast::statement_t parse_statement(parser_t& parser) {
 }
 
 ast::declaration_t parse_declaration(parser_t& parser) {
-    if(parser.advance_token().token_type != token_type_t::INT_KEYWORD) {
+    const auto type_token = parser.advance_token();
+    if(type_token.token_type != token_type_t::INT_KEYWORD) {
         throw std::runtime_error("expected `int` keyword");
     }
 
@@ -410,7 +437,7 @@ ast::declaration_t parse_declaration(parser_t& parser) {
     }
 
     if(parser.peek_token().token_type != token_type_t::EQUALS) {
-        auto ret = ast::declaration_t{ast::var_name_t(identifier_token.token_text), std::nullopt};
+        auto ret = ast::declaration_t{type_token, ast::var_name_t(identifier_token.token_text), std::nullopt};
 
         parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in statement.");
 
@@ -419,17 +446,13 @@ ast::declaration_t parse_declaration(parser_t& parser) {
 
     parser.advance_token(); // consume `=` token
 
-    auto ret = ast::declaration_t{ast::var_name_t(identifier_token.token_text), parse_expression(parser)};
+    auto ret = ast::declaration_t{type_token, ast::var_name_t(identifier_token.token_text), parse_expression(parser)};
 
     parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in statement.");
 
     return ret;
 }
 ast::compound_statement_t parse_compound_statement(parser_t& parser) {
-    if(parser.is_eof()) {
-        throw std::runtime_error("Unexpected end of file.");
-    }
-
     parser.expect_token(token_type_t::LEFT_CURLY, "Expected `{` in statement.");
 
     ast::compound_statement_t ret{};
@@ -449,8 +472,60 @@ ast::compound_statement_t parse_compound_statement(parser_t& parser) {
 
     return ret;
 }
-ast::function_declaration_t parse_function_decl(parser_t& parser) {
-    parser.expect_token(token_type_t::INT_KEYWORD, "Expected `int` keyword in function declaration.");
+static std::vector<std::pair<ast::type_name_t, std::optional<ast::var_name_t>>> parse_function_definition_parameter_list(parser_t& parser) {
+    std::vector<std::pair<ast::type_name_t, std::optional<ast::var_name_t>>> param_list;
+    for(;;) {
+        std::vector<token_t> current_param;
+        while(parser.peek_token().token_type != token_type_t::COMMA && parser.peek_token().token_type != token_type_t::RIGHT_PAREN) {
+            if(parser.is_eof()) {
+                throw std::runtime_error("Unexpected end of file.");
+            }
+            current_param.push_back(parser.advance_token());
+        }
+
+        if(current_param.size() == 0) {
+            break; // empty param list. e.g. `int main();`
+        } else if(current_param.size() == 1) {
+            // TODO: Only integer types are supported in parameter lists currently
+            if(current_param[0].token_type != token_type_t::INT_KEYWORD) {
+                throw std::runtime_error("Expected identifier name (type name) in function declaration.");
+            }
+            param_list.push_back({current_param[0], std::nullopt});
+        } else if(current_param.size() == 2) {
+            // TODO: Only integer types are supported in parameter lists currently
+            if(current_param[0].token_type != token_type_t::INT_KEYWORD) {
+                throw std::runtime_error("Expected identifier name (type name) in function declaration.");
+            }
+            if(current_param[1].token_type != token_type_t::IDENTIFIER) {
+                throw std::runtime_error("Expected identifier name (variable name) in function declaration.");
+            }
+            param_list.push_back({current_param[0], std::make_optional(ast::var_name_t{current_param[1].token_text})});
+        } else {
+            throw std::runtime_error("Unexpected token in function definition param list.");
+        }
+
+        if(parser.peek_token().token_type == token_type_t::COMMA) {
+            parser.advance_token(); // consume `,`
+        } else if(parser.peek_token().token_type == token_type_t::RIGHT_PAREN) {
+            break;
+        } else {
+            throw std::logic_error("Unexpected token in function definition param list."); // should be impossible to trigger
+        }
+    }
+    return param_list;
+}
+static std::vector<ast::type_name_t> parse_function_declaration_parameter_list(std::vector<std::pair<ast::type_name_t, std::optional<ast::var_name_t>>> list_with_names) {
+    std::vector<ast::type_name_t> ret_type_list;
+    for(const auto& param : list_with_names) {
+        ret_type_list.push_back(std::move(param.first));
+    }
+    return ret_type_list;
+}
+std::variant<ast::function_declaration_t, ast::function_definition_t> parse_function(parser_t& parser) {
+    const auto return_type = parser.advance_token();
+    if(return_type.token_type != token_type_t::INT_KEYWORD) {
+        throw std::runtime_error("Expected `int` keyword in function declaration.");
+    }
 
     const auto name_token = parser.advance_token();
     if(name_token.token_type != token_type_t::IDENTIFIER) {
@@ -458,7 +533,14 @@ ast::function_declaration_t parse_function_decl(parser_t& parser) {
     }
 
     parser.expect_token(token_type_t::LEFT_PAREN, "Expected `(` in function declaration.");
+    auto param_list = parse_function_definition_parameter_list(parser);
     parser.expect_token(token_type_t::RIGHT_PAREN, "Expected `)` in function declaration.");
+
+    if(parser.peek_token().token_type == token_type_t::SEMICOLON) {
+        parser.advance_token();
+
+        return ast::function_declaration_t{ return_type, ast::func_name_t(name_token.token_text), parse_function_declaration_parameter_list(param_list) };
+    }
 
     ast::compound_statement_t statements = parse_compound_statement(parser);
 
@@ -469,9 +551,18 @@ ast::function_declaration_t parse_function_decl(parser_t& parser) {
         }
     }
 
-    return ast::function_declaration_t{ std::string(name_token.token_text), std::move(statements) };
+    return ast::function_definition_t{ return_type, ast::func_name_t(name_token.token_text), std::move(param_list), std::move(statements) };
 }
 
 ast::program_t parse(parser_t& parser) {
-    return ast::program_t { std::vector{parse_function_decl(parser)}, {} };
+    std::vector<ast::function_declaration_t> decls;
+    std::vector<ast::function_definition_t> defs;
+    while(parser.peek_token().token_type != token_type_t::EOF_TOK) {
+        auto func = parse_function(parser);
+        std::visit(overloaded{
+            [&decls](const ast::function_declaration_t& f) { decls.push_back(f); },
+            [&defs](const ast::function_definition_t& f) { defs.push_back(f); }
+        }, func);
+    }
+    return ast::program_t { std::move(decls), std::move(defs), {} };
 }

@@ -6,7 +6,7 @@
 #include <memory>
 
 #include <frontend/lexing/lexer.hpp>
-#include "ast.hpp"
+#include <frontend/ast/ast.hpp>
 #include <utils/common.hpp>
 
 

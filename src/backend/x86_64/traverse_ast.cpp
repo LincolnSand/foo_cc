@@ -226,9 +226,9 @@ void generate_compound_statement(assembly_output_t& assembly_output, const ast::
 }
 void generate_function_decl(assembly_output_t& assembly_output, const ast::function_declaration_t& function) {
     assembly_output.output += ".globl ";
-    assembly_output.output += function.func_name;
+    assembly_output.output += function.function_name;
     assembly_output.output += "\n";
-    assembly_output.output += function.func_name;
+    assembly_output.output += function.function_name;
     assembly_output.output += ":\n";
 
     generate_function_prologue(assembly_output);
