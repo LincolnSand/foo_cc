@@ -10,11 +10,8 @@ void store_register(assembly_output_t& assembly_output, const std::string& regis
 }
 void store_variable(assembly_output_t& assembly_output, const ast::var_name_t variable_name, const std::string& register_name) {
     const auto offset = assembly_output.variable_lookup.find_from_lowest_scope(variable_name);
-    if(!offset.has_value()) {
-        throw std::runtime_error("Variable " + variable_name + " not declared in current scope.");
-    }
 
-    assembly_output.output += "movq %" + register_name + ", -" + std::to_string(*offset) + "(%rbp)\n";
+    assembly_output.output += "movq %" + register_name + ", -" + std::to_string(offset.value()) + "(%rbp)\n";
 
     // assignments are expressions in C, so we push the new value of the variable onto the stack
     assembly_output.output += "pushq %" + register_name + "\n";
@@ -24,11 +21,8 @@ void pop_register(assembly_output_t& assembly_output, const std::string& registe
 }
 void pop_variable(assembly_output_t& assembly_output, const ast::var_name_t variable_name, const std::string& register_name) {
     const auto offset = assembly_output.variable_lookup.find_from_lowest_scope(variable_name);
-    if(!offset.has_value()) {
-        throw std::runtime_error("Variable " + variable_name + " not declared in current scope.");
-    }
 
-    assembly_output.output += "movq -" + std::to_string(*offset) + "(%rbp), %" + register_name + "\n";
+    assembly_output.output += "movq -" + std::to_string(offset.value()) + "(%rbp), %" + register_name + "\n";
 }
 
 void allocate_stack_space_for_variable(assembly_output_t& assembly_output) {
@@ -174,9 +168,6 @@ void generate_prefix_plus_plus(assembly_output_t& assembly_output, const ast::un
     generate_expression(assembly_output, unary_exp.exp); // first evaluate the interior expression so we handle any side effects
 
     const auto var_name = validate_lvalue_expression_exp(unary_exp.exp);
-    if(!assembly_output.variable_lookup.contains_in_accessible_scopes(var_name)) {
-        throw std::runtime_error("Variable " + var_name + " not declared in currently accessible scopes.");
-    }
 
     pop_variable(assembly_output, var_name, "rax");
     assembly_output.output += "addq $1, %rax\n";
@@ -187,9 +178,6 @@ void generate_prefix_minus_minus(assembly_output_t& assembly_output, const ast::
     generate_expression(assembly_output, unary_exp.exp); // first evaluate the interior expression so we handle any side effects
 
     const auto var_name = validate_lvalue_expression_exp(unary_exp.exp);
-    if(!assembly_output.variable_lookup.contains_in_accessible_scopes(var_name)) {
-        throw std::runtime_error("Variable " + var_name + " not declared in currently accessible scopes.");
-    }
 
     pop_variable(assembly_output, var_name, "rax");
     assembly_output.output += "subq $1, %rax\n";
@@ -200,9 +188,6 @@ void generate_postfix_plus_plus(assembly_output_t& assembly_output, const ast::u
     generate_expression(assembly_output, unary_exp.exp); // first evaluate the interior expression so we handle any side effects
 
     const auto var_name = validate_lvalue_expression_exp(unary_exp.exp);
-    if(!assembly_output.variable_lookup.contains_in_accessible_scopes(var_name)) {
-        throw std::runtime_error("Variable " + var_name + " not declared in currently accessible scopes.");
-    }
 
     pop_variable(assembly_output, var_name, "rax");
     assembly_output.output += "movq %rax, %rcx\n"; // store the variable value before the increment
@@ -214,9 +199,6 @@ void generate_postfix_minus_minus(assembly_output_t& assembly_output, const ast:
     generate_expression(assembly_output, unary_exp.exp); // first evaluate the interior expression so we handle any side effects
 
     const auto var_name = validate_lvalue_expression_exp(unary_exp.exp);
-    if(!assembly_output.variable_lookup.contains_in_accessible_scopes(var_name)) {
-        throw std::runtime_error("Variable " + var_name + " not declared in currently accessible scopes.");
-    }
 
     pop_variable(assembly_output, var_name, "rax");
     assembly_output.output += "movq %rax, %rcx\n"; // store the variable value before the increment

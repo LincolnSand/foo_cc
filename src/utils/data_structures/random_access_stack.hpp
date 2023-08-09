@@ -121,6 +121,10 @@ public:
         return scopes.peek().variables;
     }
 
+    void increment_current_block_stack_amount(std::size_t incr) {
+        scopes.peek().stack_size += incr;
+    }
+
     void create_new_scope() {
         scopes.push(block_scope_t{});
     }

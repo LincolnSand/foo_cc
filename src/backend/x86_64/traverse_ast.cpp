@@ -187,10 +187,6 @@ void generate_statement(assembly_output_t& assembly_output, const ast::statement
 }
 
 void generate_declaration(assembly_output_t& assembly_output, const ast::declaration_t& decl) {
-    if(assembly_output.variable_lookup.contains_in_lowest_scope(decl.var_name)) {
-        throw std::runtime_error("Variable " + decl.var_name + " already declared in current scope.");
-    }
-
     // start off at `sizeof(std::uint64_t)` instead of `0` since we read from low to high memory address and we negate the offset from ebp in the emited code, so the first byte is `-8` and the range is [-8, 0) instead of [0, -8).
     assembly_output.variable_lookup.add_new_variable_in_current_scope(decl.var_name, (assembly_output.current_ebp_offset += sizeof(std::uint64_t))); // TODO: we currently only support 64 bit integer type
 
@@ -204,7 +200,9 @@ void generate_declaration(assembly_output_t& assembly_output, const ast::declara
     }
 }
 void generate_compound_statement(assembly_output_t& assembly_output, const ast::compound_statement_t& compound_stmt, const bool is_function) {
-    assembly_output.variable_lookup.create_new_scope();
+    if(!is_function) {
+        assembly_output.variable_lookup.create_new_scope(); // new scope is created by caller for function definitions since the parameter variable names need to be declared in the function scope
+    }
 
     for(const auto& stmt : compound_stmt.stmts) {
         std::visit(overloaded{
@@ -224,24 +222,34 @@ void generate_compound_statement(assembly_output_t& assembly_output, const ast::
     }
     assembly_output.current_ebp_offset -= rsp_offset;
 }
-void generate_function_decl(assembly_output_t& assembly_output, const ast::function_declaration_t& function) {
+void generate_function_definition(assembly_output_t& assembly_output, const ast::function_definition_t& function_definition) {
     assembly_output.output += ".globl ";
-    assembly_output.output += function.function_name;
+    assembly_output.output += function_definition.function_name;
     assembly_output.output += "\n";
-    assembly_output.output += function.function_name;
+    assembly_output.output += function_definition.function_name;
     assembly_output.output += ":\n";
 
     generate_function_prologue(assembly_output);
 
-    generate_compound_statement(assembly_output, function.statements, true);
+    assembly_output.variable_lookup.create_new_scope();
+    for(const auto param : function_definition.params) {
+        if(param.second.has_value()) {
+            assembly_output.variable_lookup.add_new_variable_in_current_scope(param.second.value(), (assembly_output.current_ebp_offset += sizeof(std::uint64_t)));
+        } else { // still allocate the stack space of anonymous function parameters for ABI calling convention purposes
+            assembly_output.variable_lookup.increment_current_block_stack_amount(sizeof(std::uint64_t));
+            assembly_output.current_ebp_offset += sizeof(std::uint64_t);
+        }
+    }
+    generate_compound_statement(assembly_output, function_definition.statements, true);
 }
 
 void generate_program(assembly_output_t& assembly_output, const ast::program_t& program) {
     for(const auto& decl : program.declarations) {
         generate_declaration(assembly_output, decl);
     }
-    for(const auto& func_decl : program.function_declarations) {
-        generate_function_decl(assembly_output, func_decl);
+    // function declarations do not get emited into the assembly. They exist for the purposes of the validation pass and for lookup when emiting function calls.
+    for(const auto& function_definition : program.function_definitions) {
+        generate_function_definition(assembly_output, function_definition);
     }
 }
 std::string generate_asm(const ast::program_t& program) {

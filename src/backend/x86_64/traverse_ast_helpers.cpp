@@ -61,9 +61,6 @@ void generate_logical_or(assembly_output_t& assembly_output, const ast::binary_e
 }
 void generate_assignment_expression(assembly_output_t& assembly_output, const ast::binary_expression_t& assignment) {
     const auto var_name = validate_lvalue_expression_exp(assignment.left);
-    if(!assembly_output.variable_lookup.contains_in_accessible_scopes(var_name)) {
-        throw std::runtime_error("Variable " + var_name + " not declared in currently accessible scopes.");
-    }
 
     generate_expression(assembly_output, assignment.right);
 
