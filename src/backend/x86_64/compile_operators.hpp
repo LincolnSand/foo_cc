@@ -4,6 +4,7 @@
 #include <string>
 #include <stdexcept>
 #include <cstdint>
+#include <stack>
 
 #include <frontend/ast/ast.hpp>
 #include <frontend/parsing/parser_utils.hpp>
@@ -12,9 +13,9 @@
 
 struct assembly_output_t  {
     std::string output;
-    std::uint64_t current_label_number = 0; // appended to the end of labels so we don't get duplicate labels for things like boolean short circuiting
+    std::uint64_t current_label_number = 0; // appended to the end of labels so we don't get duplicate labels for things like boolean short circuiting and if statements
     utils::data_structures::backend_variable_lookup_t variable_lookup;
-    std::uint64_t current_ebp_offset = 0; // appended to `-` symbol since the stack grows downwards on x86_64
+    std::uint64_t current_rbp_offset; // appended to `-` symbol since the stack grows downwards on x86_64
 
     assembly_output_t() = default;
     assembly_output_t(std::string output) : output(std::move(output)) {}
@@ -25,9 +26,9 @@ void generate_expression(assembly_output_t& assembly_output, const ast::expressi
 
 void store_constant(assembly_output_t& assembly_output, const ast::constant_t& constant);
 void store_register(assembly_output_t& assembly_output, const std::string& register_name);
-void store_variable(assembly_output_t& assembly_output, const ast::var_name_t variable_name, const std::string& register_name);
+void store_variable(assembly_output_t& assembly_output, const ast::var_name_t& variable_name, const std::string& register_name);
 void pop_register(assembly_output_t& assembly_output, const std::string& register_name);
-void pop_variable(assembly_output_t& assembly_output, const ast::var_name_t variable_name, const std::string& register_name);
+void pop_variable(assembly_output_t& assembly_output, const ast::var_name_t& variable_name, const std::string& register_name);
 
 void allocate_stack_space_for_variable(assembly_output_t& assembly_output);
 

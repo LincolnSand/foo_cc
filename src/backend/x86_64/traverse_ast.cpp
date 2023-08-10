@@ -120,6 +120,56 @@ void generate_ternary_expression(assembly_output_t& assembly_output, const ast::
     generate_expression(assembly_output, ternary_exp.if_false);
     assembly_output.output += end_label_name + ":\n";
 }
+void push_params(assembly_output_t& assembly_output, const std::vector<ast::expression_t>& params) {
+    for(const auto& param : params) {
+        generate_expression(assembly_output, param);
+    }
+
+    if(params.size() >= 1) {
+        pop_register(assembly_output, "rdi");
+    }
+    if(params.size() >= 2) {
+        pop_register(assembly_output, "rsi");
+    }
+    if(params.size() >= 3) {
+        pop_register(assembly_output, "rdx");
+    }
+    if(params.size() >= 4) {
+        pop_register(assembly_output, "rcx");
+    }
+    if(params.size() >= 5) {
+        pop_register(assembly_output, "r8");
+    }
+    if(params.size() >= 6) {
+        pop_register(assembly_output, "r9");
+    }
+    if(params.size() >= 7); // values are already on the stack in reverse order, so no need to do anything here
+
+    // callee preserves the registers `rbx`, `rsp`, `rbp`, `r12`, `r13`, `r14`, and `r15`.
+}
+void pop_params(assembly_output_t& assembly_output, const ast::function_call_t& function_call) {
+    if(function_call.params.size() > 6) { // parameter isn't in register
+        assembly_output.output += "addq $" + std::to_string(function_call.params.size()-6) + ", %rsp\n"; // deallocate caller allocated parameters
+    }
+}
+void generate_function_call(assembly_output_t& assembly_output, const ast::function_call_t& function_call_exp) {
+    push_params(assembly_output, function_call_exp.params);
+    bool needs_alignment = false;
+    if((assembly_output.current_rbp_offset % 16) == sizeof(std::uint64_t)) {
+        assembly_output.output += "subq $" + std::to_string(sizeof(std::uint64_t)) + ", %rsp\n";
+        assembly_output.current_rbp_offset += sizeof(std::uint64_t);
+        needs_alignment = true;
+    } else if(assembly_output.current_rbp_offset % 16 != 0) {
+        throw std::logic_error("Invalid stack alignment.");
+    }
+    assembly_output.output += "call " + function_call_exp.function_name + "\n";
+    if(needs_alignment) {
+        assembly_output.output += "addq $" + std::to_string(sizeof(std::uint64_t)) + ", %rsp\n";
+        assembly_output.current_rbp_offset -= sizeof(std::uint64_t);
+    }
+    pop_params(assembly_output, function_call_exp); // does not trash or affect the current register values after function call
+    store_register(assembly_output, "rax"); // push the return value of the function call
+}
 
 void generate_expression(assembly_output_t& assembly_output, const ast::expression_t& expression) {
     std::visit(overloaded{
@@ -134,6 +184,9 @@ void generate_expression(assembly_output_t& assembly_output, const ast::expressi
         },
         [&assembly_output](const std::shared_ptr<ast::ternary_expression_t>& ternary_exp) {
             generate_ternary_expression(assembly_output, *ternary_exp);
+        },
+        [&assembly_output](const std::shared_ptr<ast::function_call_t>& function_call_exp) {
+            generate_function_call(assembly_output, *function_call_exp);
         },
         [&assembly_output](const ast::constant_t& constant) {
             store_constant(assembly_output, constant);
@@ -150,7 +203,13 @@ void generate_return_statement(assembly_output_t& assembly_output, const ast::re
 
     pop_register(assembly_output, "rax");
 
+    const auto rsp_offset = assembly_output.variable_lookup.get_total_stack_size();
+    assembly_output.output += "addq $" + std::to_string(rsp_offset) + ", %rsp\n";
+    assembly_output.current_rbp_offset -= rsp_offset;
+
     generate_function_epilogue(assembly_output);
+
+    assembly_output.current_rbp_offset += rsp_offset;
 }
 void generate_if_statement(assembly_output_t& assembly_output, const ast::if_statement_t& if_stmt) {
     generate_expression(assembly_output, if_stmt.if_exp);
@@ -187,8 +246,8 @@ void generate_statement(assembly_output_t& assembly_output, const ast::statement
 }
 
 void generate_declaration(assembly_output_t& assembly_output, const ast::declaration_t& decl) {
-    // start off at `sizeof(std::uint64_t)` instead of `0` since we read from low to high memory address and we negate the offset from ebp in the emited code, so the first byte is `-8` and the range is [-8, 0) instead of [0, -8).
-    assembly_output.variable_lookup.add_new_variable_in_current_scope(decl.var_name, (assembly_output.current_ebp_offset += sizeof(std::uint64_t))); // TODO: we currently only support 64 bit integer type
+    // start off at `sizeof(std::uint64_t)` instead of `0` since we read from low to high memory address and we negate the offset from rbp in the emited code, so the first byte is `-8` and the range is [-8, 0) instead of [0, -8).
+    assembly_output.variable_lookup.add_new_variable_in_current_scope(decl.var_name, (assembly_output.current_rbp_offset += sizeof(std::uint64_t))); // TODO: we currently only support 64 bit integer type
 
     allocate_stack_space_for_variable(assembly_output);
 
@@ -198,6 +257,29 @@ void generate_declaration(assembly_output_t& assembly_output, const ast::declara
         pop_register(assembly_output, "rax");
         store_variable(assembly_output, decl.var_name, "rax");
     }
+}
+bool has_return_statement(const ast::compound_statement_t& compound_stmt) {
+    for(const auto& stmt : compound_stmt.stmts) {
+        const bool is_return = std::visit(overloaded{
+            [](const ast::statement_t& stmt) {
+                return std::visit(overloaded{
+                    [](const ast::return_statement_t&) {
+                        return true;
+                    },
+                    [](const auto&) {
+                        return false;
+                    }
+                }, stmt);
+            },
+            [](const ast::declaration_t&) {
+                return false;
+            }
+        }, stmt);
+        if(is_return) {
+            return true;
+        }
+    }
+    return false;
 }
 void generate_compound_statement(assembly_output_t& assembly_output, const ast::compound_statement_t& compound_stmt, const bool is_function) {
     if(!is_function) {
@@ -216,11 +298,10 @@ void generate_compound_statement(assembly_output_t& assembly_output, const ast::
     }
 
     const auto rsp_offset = assembly_output.variable_lookup.destroy_current_scope();
-    if(!is_function) {
-        // no need to emit code after the last `ret` in a function as it is unreachable anyways
-        assembly_output.output += "addq $" + std::to_string(rsp_offset) + ", %rsp\n";
+    if(!has_return_statement(compound_stmt)) { // functions destroy their block scope in the return statement
+        assembly_output.output += "addq $" + std::to_string(rsp_offset) + ", %rsp\n"; // no need to emit instructions after `ret` as they are unreachable
     }
-    assembly_output.current_ebp_offset -= rsp_offset;
+    assembly_output.current_rbp_offset -= rsp_offset;
 }
 void generate_function_definition(assembly_output_t& assembly_output, const ast::function_definition_t& function_definition) {
     assembly_output.output += ".globl ";
@@ -232,13 +313,31 @@ void generate_function_definition(assembly_output_t& assembly_output, const ast:
     generate_function_prologue(assembly_output);
 
     assembly_output.variable_lookup.create_new_scope();
-    for(const auto param : function_definition.params) {
-        if(param.second.has_value()) {
-            assembly_output.variable_lookup.add_new_variable_in_current_scope(param.second.value(), (assembly_output.current_ebp_offset += sizeof(std::uint64_t)));
-        } else { // still allocate the stack space of anonymous function parameters for ABI calling convention purposes
-            assembly_output.variable_lookup.increment_current_block_stack_amount(sizeof(std::uint64_t));
-            assembly_output.current_ebp_offset += sizeof(std::uint64_t);
-        }
+    for(auto i = 0; i < function_definition.params.size(); ++i) {
+        if(function_definition.params.at(i).second.has_value()) {
+            if(i == (function_definition.params.size()-1)) {
+                store_register(assembly_output, "rdi");
+                assembly_output.current_rbp_offset += sizeof(std::uint64_t);
+            } else if(i == (function_definition.params.size()-2)) {
+                store_register(assembly_output, "rsi");
+                assembly_output.current_rbp_offset += sizeof(std::uint64_t);
+            } else if(i == (function_definition.params.size()-3)) {
+                store_register(assembly_output, "rdx");
+                assembly_output.current_rbp_offset += sizeof(std::uint64_t);
+            } else if(i == (function_definition.params.size()-4)) {
+                store_register(assembly_output, "rcx");
+                assembly_output.current_rbp_offset += sizeof(std::uint64_t);
+            } else if(i == (function_definition.params.size()-5)) {
+                store_register(assembly_output, "r8");
+                assembly_output.current_rbp_offset += sizeof(std::uint64_t);
+            } else if(i == (function_definition.params.size()-6)) {
+                store_register(assembly_output, "r9");
+                assembly_output.current_rbp_offset += sizeof(std::uint64_t);
+            } else {
+                assembly_output.output += "movq " + std::to_string(i*sizeof(std::uint64_t)) + "(%rbp), -" + std::to_string(assembly_output.current_rbp_offset += sizeof(std::uint64_t)) + "(%rbp)\n";
+            }
+            assembly_output.variable_lookup.add_new_variable_in_current_scope(function_definition.params.at(i).second.value(), assembly_output.current_rbp_offset);
+        } // ignore anonymous parameters as they cannot be referenced by the callee
     }
     generate_compound_statement(assembly_output, function_definition.statements, true);
 }

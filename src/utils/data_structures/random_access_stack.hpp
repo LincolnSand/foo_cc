@@ -8,6 +8,7 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <variant>
 
 #include <frontend/ast/ast.hpp>
 
@@ -51,7 +52,11 @@ public:
     }
 
     void push(const T& value) {
-        data.push_back(value);
+        if(stack_size == data.size()) {
+            data.push_back(value);
+        } else {
+            data[stack_size] = value;
+        }
         ++stack_size;
     }
     T pop() {
@@ -99,18 +104,18 @@ public:
         }
         return false;
     }
-    std::optional<std::uint64_t> find_from_lowest_scope(const std::string& variable_name) {
+    std::optional<rbp_offset_t> find_from_lowest_scope(const std::string& variable_name) {
         for(std::uint32_t i = scopes.last_index(); i < scopes.size(); --i) { // iterate backwards so we start in lowest level scope and use `i < variables.size()` so we handle unsigned integer underflow for `i`.
             auto it = scopes.at(i).variables.find(variable_name);
             if(it != scopes.at(i).variables.end()) {
-                return it->second; // returns the variable ebp offset for the lowest scope level variable with this name. This means we properly handle variable shadowing.
+                return it->second; // returns the variable rbp offset for the lowest scope level variable with this name. This means we properly handle variable shadowing.
             }
         }
         return std::nullopt; // variable with this name not found in any accessible scope
     }
 
-    void add_new_variable_in_current_scope(const ast::var_name_t& variable_name, const rbp_offset_t ebp_offset) {
-        scopes.peek().variables.insert({variable_name, ebp_offset});
+    void add_new_variable_in_current_scope(const ast::var_name_t& variable_name, const rbp_offset_t rbp_offset) {
+        scopes.peek().variables.insert({variable_name, rbp_offset});
         scopes.peek().stack_size += sizeof(std::uint64_t); // TODO: we currently only support 64 bit integer type
     }
 
@@ -130,6 +135,14 @@ public:
     }
     std::uint64_t destroy_current_scope() {
         return scopes.pop().stack_size;
+    }
+
+    std::uint64_t get_total_stack_size() const {
+        std::uint64_t ret = 0;
+        for(auto i = 0; i < scopes.size(); ++i) {
+            ret += scopes.at(i).stack_size;
+        }
+        return ret;
     }
 };
 class validation_variable_lookup_t {

@@ -521,6 +521,23 @@ static std::vector<ast::type_name_t> parse_function_declaration_parameter_list(s
     }
     return ret_type_list;
 }
+static bool is_return_statement(std::variant<ast::statement_t, ast::declaration_t>& stmt) {
+    return std::visit(overloaded{
+        [](const ast::statement_t& stmt) {
+            return std::visit(overloaded{
+                [](const ast::return_statement_t&) {
+                    return true;
+                },
+                [](const auto&) {
+                    return false;
+                }
+            }, stmt);
+        },
+        [](const ast::declaration_t&) {
+            return false;
+        }
+    }, stmt);
+}
 std::variant<ast::function_declaration_t, ast::function_definition_t> parse_function(parser_t& parser) {
     const auto return_type = parser.advance_token();
     if(return_type.token_type != token_type_t::INT_KEYWORD) {
@@ -546,7 +563,7 @@ std::variant<ast::function_declaration_t, ast::function_definition_t> parse_func
 
     if(name_token.token_text == "main") {
         constexpr std::size_t DEFAULT_RETURN_VALUE = 0;
-        if(statements.stmts.size() == 0 || statements.stmts.at(statements.stmts.size() - 1).index() != DEFAULT_RETURN_VALUE) {
+        if(statements.stmts.size() == 0 || !is_return_statement(statements.stmts.back())) {
             statements.stmts.push_back(ast::return_statement_t { ast::expression_t{ast::constant_t{DEFAULT_RETURN_VALUE}} } );
         }
     }

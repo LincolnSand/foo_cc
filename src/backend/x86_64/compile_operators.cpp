@@ -8,10 +8,10 @@ void store_constant(assembly_output_t& assembly_output, const ast::constant_t& c
 void store_register(assembly_output_t& assembly_output, const std::string& register_name) {
     assembly_output.output += "pushq %" + register_name + "\n";
 }
-void store_variable(assembly_output_t& assembly_output, const ast::var_name_t variable_name, const std::string& register_name) {
-    const auto offset = assembly_output.variable_lookup.find_from_lowest_scope(variable_name);
+void store_variable(assembly_output_t& assembly_output, const ast::var_name_t& variable_name, const std::string& register_name) {
+    const auto variable = assembly_output.variable_lookup.find_from_lowest_scope(variable_name).value();
 
-    assembly_output.output += "movq %" + register_name + ", -" + std::to_string(offset.value()) + "(%rbp)\n";
+    assembly_output.output += "movq %" + register_name + ", -" + std::to_string(variable) + "(%rbp)\n";
 
     // assignments are expressions in C, so we push the new value of the variable onto the stack
     assembly_output.output += "pushq %" + register_name + "\n";
@@ -19,14 +19,14 @@ void store_variable(assembly_output_t& assembly_output, const ast::var_name_t va
 void pop_register(assembly_output_t& assembly_output, const std::string& register_name) {
     assembly_output.output += "popq %" + register_name + "\n";
 }
-void pop_variable(assembly_output_t& assembly_output, const ast::var_name_t variable_name, const std::string& register_name) {
-    const auto offset = assembly_output.variable_lookup.find_from_lowest_scope(variable_name);
+void pop_variable(assembly_output_t& assembly_output, const ast::var_name_t& variable_name, const std::string& register_name) {
+    const auto variable = assembly_output.variable_lookup.find_from_lowest_scope(variable_name).value();
 
-    assembly_output.output += "movq -" + std::to_string(offset.value()) + "(%rbp), %" + register_name + "\n";
+    assembly_output.output += "movq -" + std::to_string(variable) + "(%rbp), %" + register_name + "\n";
 }
 
 void allocate_stack_space_for_variable(assembly_output_t& assembly_output) {
-    assembly_output.output += "sub $8, %rsp\n"; // TODO: we only support 64 bit integers currently
+    assembly_output.output += "subq $" + std::to_string(sizeof(std::uint64_t)) + ", %rsp\n"; // TODO: we only support 64 bit integers currently
 }
 
 void generate_negation(assembly_output_t& assembly_output) {
@@ -210,8 +210,30 @@ void generate_postfix_minus_minus(assembly_output_t& assembly_output, const ast:
 void generate_function_prologue(assembly_output_t& assembly_output) {
     assembly_output.output += "pushq %rbp\n";
     assembly_output.output += "movq %rsp, %rbp\n";
+
+    assembly_output.current_rbp_offset = 0;
+
+    assembly_output.output += "pushq %rbx\n";
+    assembly_output.output += "pushq %r12\n";
+    assembly_output.output += "pushq %r13\n";
+    assembly_output.output += "pushq %r14\n";
+    assembly_output.output += "pushq %r15\n";
+
+    assembly_output.current_rbp_offset += 5*sizeof(std::uint64_t);
 }
 void generate_function_epilogue(assembly_output_t& assembly_output) {
+    assembly_output.output += "popq %rbx\n";
+    assembly_output.output += "popq %r12\n";
+    assembly_output.output += "popq %r13\n";
+    assembly_output.output += "popq %r14\n";
+    assembly_output.output += "popq %r15\n";
+
+    const auto offset = assembly_output.current_rbp_offset;
+    if(offset != (5*sizeof(std::uint64_t))) {
+        std::cout << "offset: " << offset << '\n';
+        throw std::runtime_error("Function epilogue called with extra data on stack.");
+    }
+
     assembly_output.output += "movq %rbp, %rsp\n";
     assembly_output.output += "popq %rbp\n";
     assembly_output.output += "ret\n";
