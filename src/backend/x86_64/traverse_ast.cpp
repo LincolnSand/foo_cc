@@ -258,29 +258,6 @@ void generate_declaration(assembly_output_t& assembly_output, const ast::declara
         store_variable(assembly_output, decl.var_name, "rax");
     }
 }
-bool has_return_statement(const ast::compound_statement_t& compound_stmt) {
-    for(const auto& stmt : compound_stmt.stmts) {
-        const bool is_return = std::visit(overloaded{
-            [](const ast::statement_t& stmt) {
-                return std::visit(overloaded{
-                    [](const ast::return_statement_t&) {
-                        return true;
-                    },
-                    [](const auto&) {
-                        return false;
-                    }
-                }, stmt);
-            },
-            [](const ast::declaration_t&) {
-                return false;
-            }
-        }, stmt);
-        if(is_return) {
-            return true;
-        }
-    }
-    return false;
-}
 void generate_compound_statement(assembly_output_t& assembly_output, const ast::compound_statement_t& compound_stmt, const bool is_function) {
     if(!is_function) {
         assembly_output.variable_lookup.create_new_scope(); // new scope is created by caller for function definitions since the parameter variable names need to be declared in the function scope
@@ -304,6 +281,7 @@ void generate_compound_statement(assembly_output_t& assembly_output, const ast::
     assembly_output.current_rbp_offset -= rsp_offset;
 }
 void generate_function_definition(assembly_output_t& assembly_output, const ast::function_definition_t& function_definition) {
+    assembly_output.output += ".text\n"; // text section
     assembly_output.output += ".globl ";
     assembly_output.output += function_definition.function_name;
     assembly_output.output += "\n";
@@ -341,17 +319,38 @@ void generate_function_definition(assembly_output_t& assembly_output, const ast:
     }
     generate_compound_statement(assembly_output, function_definition.statements, true);
 }
-
-void generate_program(assembly_output_t& assembly_output, const ast::program_t& program) {
-    for(const auto& decl : program.declarations) {
-        generate_declaration(assembly_output, decl);
+void generate_global_variable_definition(assembly_output_t& assembly_output, const ast::validated_global_variable_definition_t& global_var_def) {
+    if(global_var_def.value.value == 0) {
+        assembly_output.output += ".bss\n"; // bss section
+    } else {
+        assembly_output.output += ".data\n"; // data section
     }
-    // function declarations do not get emited into the assembly. They exist for the purposes of the validation pass and for lookup when emiting function calls.
-    for(const auto& function_definition : program.function_definitions) {
-        generate_function_definition(assembly_output, function_definition);
+    assembly_output.output += ".align 8\n"; // TODO: Linux align directive, currently hardcoded to 8 since we only support 64 bit integer type globals
+    assembly_output.output += ".globl ";
+    assembly_output.output += global_var_def.var_name;
+    assembly_output.output += "\n";
+    assembly_output.output += global_var_def.var_name;
+    assembly_output.output += ":\n";
+    if(global_var_def.value.value == 0) {
+        assembly_output.output += ".zero 8\n"; // TODO: is currently hardcoded to 8 since we only support 64 bit integer type
+    } else {
+        assembly_output.output += ".quad " + std::to_string(global_var_def.value.value) + "\n"; // TODO: is currently hardcoded to `.quad` (8 bytes) since we only support 64 bit integer type
     }
 }
-std::string generate_asm(const ast::program_t& program) {
+
+void generate_program(assembly_output_t& assembly_output, const ast::validated_program_t& program) {
+    for(const auto& top_level_decl : program.top_level_declarations) {
+        std::visit(overloaded{
+            [&assembly_output](const ast::function_definition_t& function_def) {
+                generate_function_definition(assembly_output, function_def);
+            },
+            [&assembly_output](const ast::validated_global_variable_definition_t& global_var_def) {
+                generate_global_variable_definition(assembly_output, global_var_def);
+            }
+        }, top_level_decl);
+    }
+}
+std::string generate_asm(const ast::validated_program_t& program) {
     assembly_output_t assembly_output;
     generate_program(assembly_output, program);
     return assembly_output.output;

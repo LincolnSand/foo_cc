@@ -113,10 +113,21 @@ struct function_definition_t {
     compound_statement_t statements;
 };
 
+using global_variable_declaration_t = declaration_t;
 struct program_t {
     // symbol validation and all other non-syntax checking (e.g. number of params, multiple definition, etc.) will not be checked during parsing and are caught and validated during a later compiler pass.
-    std::vector<function_declaration_t> function_declarations;
-    std::vector<function_definition_t> function_definitions;
-    std::vector<declaration_t> declarations;
+    std::vector<std::variant<function_declaration_t, function_definition_t, global_variable_declaration_t>> top_level_declarations;
+};
+
+struct validated_global_variable_definition_t {
+    type_name_t type_name;
+    var_name_t var_name;
+    constant_t value; // is set to `0` if the variable is declared, but not defined in `program_t`
+};
+struct validated_program_t {
+    std::vector<std::variant<function_definition_t, validated_global_variable_definition_t>> top_level_declarations; // guaranteed to be deduplicated
 };
 }
+
+bool has_return_statement(const ast::compound_statement_t& compound_stmt); // defined in frontend/parsing/parser.cpp
+

@@ -211,14 +211,18 @@ void print_function_definition(const ast::function_definition_t& function_defini
 }
 
 void print_ast(const ast::program_t& program) {
-    for(const auto& e : program.function_declarations) {
-        print_function_decl(e);
-    }
-    for(const auto& e : program.function_definitions) {
-        print_function_definition(e);
-    }
-    for(const auto& e : program.declarations) {
-        print_declaration(e);
+    for(const auto& e : program.top_level_declarations) {
+        std::visit(overloaded{
+            [](const ast::function_declaration_t& function_decl) {
+                print_function_decl(function_decl);
+            },
+            [](const ast::function_definition_t& function_def) {
+                print_function_definition(function_def);
+            },
+            [](const ast::global_variable_declaration_t& global_var_decl) {
+                print_declaration(global_var_decl);
+            }
+        }, e);
     }
     std::cout << '\n';
 }

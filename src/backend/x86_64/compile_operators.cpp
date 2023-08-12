@@ -9,9 +9,12 @@ void store_register(assembly_output_t& assembly_output, const std::string& regis
     assembly_output.output += "pushq %" + register_name + "\n";
 }
 void store_variable(assembly_output_t& assembly_output, const ast::var_name_t& variable_name, const std::string& register_name) {
-    const auto variable = assembly_output.variable_lookup.find_from_lowest_scope(variable_name).value();
-
-    assembly_output.output += "movq %" + register_name + ", -" + std::to_string(variable) + "(%rbp)\n";
+    auto variable = assembly_output.variable_lookup.find_from_lowest_scope(variable_name);
+    if(variable.has_value()) {
+        assembly_output.output += "movq %" + register_name + ", -" + std::to_string(variable.value()) + "(%rbp)\n";
+    } else {
+        assembly_output.output += "movq %" + register_name + ", " + variable_name + "(%rip)\n"; // PIE global variable reference
+    }
 
     // assignments are expressions in C, so we push the new value of the variable onto the stack
     assembly_output.output += "pushq %" + register_name + "\n";
@@ -20,9 +23,12 @@ void pop_register(assembly_output_t& assembly_output, const std::string& registe
     assembly_output.output += "popq %" + register_name + "\n";
 }
 void pop_variable(assembly_output_t& assembly_output, const ast::var_name_t& variable_name, const std::string& register_name) {
-    const auto variable = assembly_output.variable_lookup.find_from_lowest_scope(variable_name).value();
-
-    assembly_output.output += "movq -" + std::to_string(variable) + "(%rbp), %" + register_name + "\n";
+    auto variable = assembly_output.variable_lookup.find_from_lowest_scope(variable_name);
+    if(variable.has_value()) {
+        assembly_output.output += "movq -" + std::to_string(variable.value()) + "(%rbp), %" + register_name + "\n";
+    } else {
+        assembly_output.output += "movq " + variable_name + "(%rip), %" + register_name + "\n"; // PIE global variable reference
+    }
 }
 
 void allocate_stack_space_for_variable(assembly_output_t& assembly_output) {

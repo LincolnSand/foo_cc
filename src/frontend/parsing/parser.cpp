@@ -1,6 +1,33 @@
 #include "parser.hpp"
 
 
+static bool is_return_statement(const std::variant<ast::statement_t, ast::declaration_t>& stmt) {
+    return std::visit(overloaded{
+        [](const ast::statement_t& stmt) {
+            return std::visit(overloaded{
+                [](const ast::return_statement_t&) {
+                    return true;
+                },
+                [](const auto&) {
+                    return false;
+                }
+            }, stmt);
+        },
+        [](const ast::declaration_t&) {
+            return false;
+        }
+    }, stmt);
+}
+// declared in frontend/ast/ast.hpp and used in both this file and backend/x86_64/traverse_ast.hpp
+bool has_return_statement(const ast::compound_statement_t& compound_stmt) {
+    for(const auto& stmt : compound_stmt.stmts) {
+        if(is_return_statement(stmt)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 ast::var_name_t parse_var_name(parser_t& parser) {
     auto identifier_token = parser.advance_token();
     if(!is_var_name(identifier_token)) {
@@ -521,26 +548,9 @@ static std::vector<ast::type_name_t> parse_function_declaration_parameter_list(s
     }
     return ret_type_list;
 }
-static bool is_return_statement(std::variant<ast::statement_t, ast::declaration_t>& stmt) {
-    return std::visit(overloaded{
-        [](const ast::statement_t& stmt) {
-            return std::visit(overloaded{
-                [](const ast::return_statement_t&) {
-                    return true;
-                },
-                [](const auto&) {
-                    return false;
-                }
-            }, stmt);
-        },
-        [](const ast::declaration_t&) {
-            return false;
-        }
-    }, stmt);
-}
-std::variant<ast::function_declaration_t, ast::function_definition_t> parse_function(parser_t& parser) {
-    const auto return_type = parser.advance_token();
-    if(return_type.token_type != token_type_t::INT_KEYWORD) {
+std::variant<ast::function_declaration_t, ast::function_definition_t, ast::global_variable_declaration_t> parse_top_level_declaration(parser_t& parser) {
+    const auto type_token = parser.advance_token();
+    if(type_token.token_type != token_type_t::INT_KEYWORD) {
         throw std::runtime_error("Expected `int` keyword in function declaration.");
     }
 
@@ -549,37 +559,52 @@ std::variant<ast::function_declaration_t, ast::function_definition_t> parse_func
         throw std::runtime_error("Expected identifier name in function declaration.");
     }
 
-    parser.expect_token(token_type_t::LEFT_PAREN, "Expected `(` in function declaration.");
-    auto param_list = parse_function_definition_parameter_list(parser);
-    parser.expect_token(token_type_t::RIGHT_PAREN, "Expected `)` in function declaration.");
-
-    if(parser.peek_token().token_type == token_type_t::SEMICOLON) {
+    if(parser.peek_token().token_type == token_type_t::LEFT_PAREN) {
         parser.advance_token();
+        auto param_list = parse_function_definition_parameter_list(parser);
+        parser.expect_token(token_type_t::RIGHT_PAREN, "Expected `)` in function declaration.");
 
-        return ast::function_declaration_t{ return_type, ast::func_name_t(name_token.token_text), parse_function_declaration_parameter_list(param_list) };
-    }
+        if(parser.peek_token().token_type == token_type_t::SEMICOLON) {
+            parser.advance_token();
 
-    ast::compound_statement_t statements = parse_compound_statement(parser);
-
-    if(name_token.token_text == "main") {
-        constexpr std::size_t DEFAULT_RETURN_VALUE = 0;
-        if(statements.stmts.size() == 0 || !is_return_statement(statements.stmts.back())) {
-            statements.stmts.push_back(ast::return_statement_t { ast::expression_t{ast::constant_t{DEFAULT_RETURN_VALUE}} } );
+            return ast::function_declaration_t{ type_token, ast::func_name_t(name_token.token_text), parse_function_declaration_parameter_list(param_list) };
         }
-    }
 
-    return ast::function_definition_t{ return_type, ast::func_name_t(name_token.token_text), std::move(param_list), std::move(statements) };
+        ast::compound_statement_t statements = parse_compound_statement(parser);
+
+        if(name_token.token_text == "main") {
+            constexpr std::size_t DEFAULT_RETURN_VALUE = 0;
+            // use `has_return_statement` instead of `is_return_statement` because we don't need to emit a return statement if there already is one,
+            //  even if there is unreachable code after the already existing return statement.
+            if(statements.stmts.size() == 0 || !has_return_statement(statements)) {
+                statements.stmts.push_back(ast::return_statement_t { ast::expression_t{ast::constant_t{DEFAULT_RETURN_VALUE}} } );
+            }
+        }
+
+        return ast::function_definition_t{ type_token, ast::func_name_t(name_token.token_text), std::move(param_list), std::move(statements) };
+    } else {
+        if(parser.peek_token().token_type != token_type_t::EQUALS) {
+            auto ret = ast::global_variable_declaration_t{type_token, ast::var_name_t(name_token.token_text), std::nullopt};
+        
+            parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in global variable declaration.");
+
+            return ret;
+        }
+
+        parser.advance_token(); // consume `=` token
+
+        auto ret = ast::global_variable_declaration_t{type_token, ast::var_name_t(name_token.token_text), parse_expression(parser)};
+
+        parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in global variable declaration.");
+
+        return ret;
+    }
 }
 
 ast::program_t parse(parser_t& parser) {
-    std::vector<ast::function_declaration_t> decls;
-    std::vector<ast::function_definition_t> defs;
+    std::vector<std::variant<ast::function_declaration_t, ast::function_definition_t, ast::global_variable_declaration_t>> top_level_declarations;
     while(parser.peek_token().token_type != token_type_t::EOF_TOK) {
-        auto func = parse_function(parser);
-        std::visit(overloaded{
-            [&decls](const ast::function_declaration_t& f) { decls.push_back(f); },
-            [&defs](const ast::function_definition_t& f) { defs.push_back(f); }
-        }, func);
+        top_level_declarations.push_back(parse_top_level_declaration(parser));
     }
-    return ast::program_t { std::move(decls), std::move(defs), {} };
+    return ast::program_t { std::move(top_level_declarations) };
 }

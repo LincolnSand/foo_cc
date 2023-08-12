@@ -24,5 +24,5 @@ void generate_declaration(assembly_output_t& assembly_output, const ast::declara
 void generate_compound_statement(assembly_output_t& assembly_output, const ast::compound_statement_t& compound_stmt, bool is_function = false);
 void generate_function_definition(assembly_output_t& assembly_output, const ast::function_definition_t& function_definition);
 
-void generate_program(assembly_output_t& assembly_output, const ast::program_t& program);
-std::string generate_asm(const ast::program_t& program);
+void generate_program(assembly_output_t& assembly_output, const ast::validated_program_t& program);
+std::string generate_asm(const ast::validated_program_t& program);

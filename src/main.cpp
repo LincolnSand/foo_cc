@@ -30,11 +30,11 @@ int main(int argc, char** argv) {
         parser_t parser(tokens_list);
         ast::program_t ast = parse(parser);
 
-        validate_ast(ast);
+        ast::validated_program_t valid_ast = validate_ast(ast);
 
         //print_ast(ast);
 
-        std::string assembly_output = generate_asm(ast);
+        std::string assembly_output = generate_asm(valid_ast);
         write_string_into_file(assembly_output, out_filename.c_str());
     } else {
         std::cout << "You require an input file\n";
