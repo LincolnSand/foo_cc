@@ -16,19 +16,34 @@
 namespace ast {
 using var_name_t = std::string;
 struct constant_t {
-    int value;
+    std::variant<int, double, char> value;
+};
+
+enum class type_category_t {
+    INT, DOUBLE, CHAR,
+};
+struct type_name_t {
+    type_category_t token_type;
+    std::string type_name;
 };
 
 struct grouping_t;
+struct convert_t;
 struct unary_expression_t;
 struct binary_expression_t;
 struct ternary_expression_t;
 struct function_call_t;
 // `std::shared_ptr` is to get around not having full recursive type definitions in C++
 // TODO: maybe use `std::unique_ptr` instead of `std::shared_ptr`
-using expression_t = std::variant<std::shared_ptr<grouping_t>, std::shared_ptr<unary_expression_t>, std::shared_ptr<binary_expression_t>, std::shared_ptr<ternary_expression_t>, std::shared_ptr<function_call_t>, constant_t, var_name_t>;
+struct expression_t {
+    std::variant<std::shared_ptr<grouping_t>, std::shared_ptr<convert_t>, std::shared_ptr<unary_expression_t>, std::shared_ptr<binary_expression_t>, std::shared_ptr<ternary_expression_t>, std::shared_ptr<function_call_t>, constant_t, var_name_t> expr;
+    std::optional<type_name_t> type; // usually has `std::nullopt` if not a literal after initial parsing stage. Is filled in during semantic analysis and type checking pass (as we often need symbol tables).
+};
 
 struct grouping_t { // grouped with `( <expr> )`
+    expression_t expr;
+};
+struct convert_t { // used for type conversions and casts
     expression_t expr;
 };
 struct function_call_t {
@@ -77,7 +92,6 @@ struct ternary_expression_t {
 struct return_statement_t {
     expression_t expr;
 };
-using type_name_t = token_t;
 struct declaration_t {
     type_name_t type_name;
     var_name_t var_name;
@@ -129,5 +143,7 @@ struct validated_program_t {
 };
 }
 
-bool has_return_statement(const ast::compound_statement_t& compound_stmt); // defined in frontend/parsing/parser.cpp
+// defined in frontend/parsing/parser.cpp
+ast::type_name_t create_type_name_from_token(const token_t& token);
+bool has_return_statement(const ast::compound_statement_t& compound_stmt);
 

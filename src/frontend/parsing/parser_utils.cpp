@@ -2,7 +2,7 @@
 
 
 bool is_constant(token_t token) {
-    return token.token_type == token_type_t::INT_CONSTANT;
+    return token.token_type == token_type_t::INT_CONSTANT || token.token_type == token_type_t::DOUBLE_CONSTANT || token.token_type == token_type_t::CHAR_CONSTANT;
 }
 bool is_var_name(token_t token) {
     return token.token_type == token_type_t::IDENTIFIER;
@@ -48,8 +48,12 @@ ast::var_name_t validate_lvalue_expression_exp(const ast::expression_t& expr) {
         },
         [](const ast::var_name_t& var_name) -> ast::var_name_t {
             return var_name;
+        },
+        [](const std::shared_ptr<ast::convert_t>& convert) -> ast::var_name_t {
+            throw std::runtime_error("Cannot assign to cast.");
+            return "";
         }
-    }, expr);
+    }, expr.expr);
 }
 
 std::unique_ptr<ast::grouping_t> make_grouping(ast::expression_t&& exp) {

@@ -1,18 +1,33 @@
 #include "lexer.hpp"
 
 
-// TODO: we will need to handle floats later, for now we will just handle integer constants
 token_type_t handle_number(lexer_t& lexer) {
     while(utils::is_digit(lexer.peek_char())) {
         lexer.advance_char();
     }
-    return token_type_t::INT_CONSTANT;
+    if(lexer.peek_char() != '.') {
+        return token_type_t::INT_CONSTANT;
+    }
+    lexer.advance_char();
+    while(utils::is_digit(lexer.peek_char())) {
+        lexer.advance_char();
+    }
+    return token_type_t::DOUBLE_CONSTANT;
 }
 token_type_t handle_identifier(lexer_t& lexer) {
     while(utils::is_alpha_num(lexer.peek_char())) {
         lexer.advance_char();
     }
     return handle_keywords(lexer);
+}
+token_type_t handle_char(lexer_t& lexer) {
+    // first quote is already consumed by caller
+    lexer.advance_char();
+    if(lexer.advance_char() != '\'') {
+        std::cout << "Missing second quote for char\n";
+        return token_type_t::ERROR;
+    }
+    return token_type_t::CHAR_CONSTANT;
 }
 
 static token_type_t match_keyword(const lexer_t& lexer, std::uint32_t start_index, std::string_view expected, const token_type_t expected_type) {
@@ -30,6 +45,10 @@ token_type_t handle_keywords(lexer_t& lexer) {
     }
 
     switch(lexer.start[0]) {
+        case 'c':
+            return match_keyword(lexer, 1, "har", token_type_t::CHAR_KEYWORD);
+        case 'd':
+            return match_keyword(lexer, 1, "ouble", token_type_t::DOUBLE_KEYWORD);
         case 'e':
             return match_keyword(lexer, 1, "lse", token_type_t::ELSE_KEYWORD);
         case 'i':
@@ -147,6 +166,9 @@ token_t scan_token(lexer_t& lexer) {
     }
     if(utils::is_alpha(c)) { // identifier cannot start with number
         return lexer.make_token(handle_identifier(lexer));
+    }
+    if(c == '\'') {
+        return lexer.make_token(handle_char(lexer));
     }
 
     switch(c) {

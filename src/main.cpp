@@ -6,7 +6,8 @@
 #include <frontend/parsing/parser.hpp>
 #include <frontend/ast/ast_printer.hpp>
 #include <middle_end/validation/validate_ast.hpp>
-#include <backend/x86_64/traverse_ast.hpp>
+#include <middle_end/typing/type_checker.hpp>
+//#include <backend/x86_64/traverse_ast.hpp>
 
 
 int main(int argc, char** argv) {
@@ -24,6 +25,7 @@ int main(int argc, char** argv) {
 
     if(argc > 1) {
         std::string file_contents = read_file_into_string(argv[1]);
+
         lexer_t lexer(file_contents.c_str());
         std::vector<token_t> tokens_list = scan_all_tokens(lexer);
 
@@ -32,10 +34,16 @@ int main(int argc, char** argv) {
 
         ast::validated_program_t valid_ast = validate_ast(ast);
 
-        //print_ast(ast);
+        print_ast(ast);
+        print_validated_ast(valid_ast);
 
-        std::string assembly_output = generate_asm(valid_ast);
-        write_string_into_file(assembly_output, out_filename.c_str());
+        type_check(valid_ast); // mutates `valid_ast`
+
+        print_validated_ast(valid_ast);
+
+        //std::string assembly_output = generate_asm(valid_ast);
+
+        //write_string_into_file(assembly_output, out_filename.c_str());
     } else {
         std::cout << "You require an input file\n";
     }

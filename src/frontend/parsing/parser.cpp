@@ -19,6 +19,23 @@ static bool is_return_statement(const std::variant<ast::statement_t, ast::declar
     }, stmt);
 }
 // declared in frontend/ast/ast.hpp and used in both this file and backend/x86_64/traverse_ast.hpp
+static ast::type_category_t get_type_category_from_token_type(token_type_t token_type) {
+    switch(token_type) {
+        case token_type_t::INT_CONSTANT:
+        case token_type_t::INT_KEYWORD:
+            return ast::type_category_t::INT;
+        case token_type_t::DOUBLE_CONSTANT:
+        case token_type_t::DOUBLE_KEYWORD:
+            return ast::type_category_t::DOUBLE;
+        case token_type_t::CHAR_CONSTANT:
+        case token_type_t::CHAR_KEYWORD:
+            return ast::type_category_t::CHAR;
+    }
+    throw std::runtime_error("Invalid/Unsupported type: [" + std::to_string(static_cast<std::uint32_t>(token_type)) + std::string("]"));
+}
+ast::type_name_t create_type_name_from_token(const token_t& token) {
+    return ast::type_name_t { get_type_category_from_token_type(token.token_type), std::string(token.token_text) };
+}
 bool has_return_statement(const ast::compound_statement_t& compound_stmt) {
     for(const auto& stmt : compound_stmt.stmts) {
         if(is_return_statement(stmt)) {
@@ -36,15 +53,25 @@ ast::var_name_t parse_var_name(parser_t& parser) {
 
     return ast::var_name_t { identifier_token.token_text };
 }
+template<typename T>
 ast::constant_t parse_constant(parser_t& parser) {
     auto next = parser.advance_token();
     if(!is_constant(next)) {
         throw std::runtime_error("Invalid constant: [" + std::to_string(static_cast<std::uint32_t>(next.token_type)) + std::string("]"));
     }
 
-    int result{};
+    T result{};
     utils::str_to_int(next.token_text, result);
     return ast::constant_t { result };
+}
+ast::expression_t parse_int_constant(parser_t& parser) {
+    return ast::expression_t { parse_constant<int>(parser), ast::type_name_t{ast::type_category_t::INT, "int"} };
+}
+ast::expression_t parse_double_constant(parser_t& parser) {
+    return ast::expression_t { parse_constant<double>(parser), ast::type_name_t{ast::type_category_t::DOUBLE, "double"} };
+}
+ast::expression_t parse_char_constant(parser_t& parser) {
+    return ast::expression_t { ast::constant_t { parser.advance_token().token_text[1] }, ast::type_name_t{ast::type_category_t::CHAR, "char"} };
 }
 std::shared_ptr<ast::grouping_t> parse_grouping(parser_t& parser) {
     parser.advance_token();
@@ -103,17 +130,22 @@ std::shared_ptr<ast::unary_expression_t> make_prefix_op(const ast::unary_operato
 ast::expression_t parse_prefix_expression(parser_t& parser) {
     switch(parser.peek_token().token_type) {
         case token_type_t::IDENTIFIER:
-            return parse_var_name(parser);
+            return {parse_var_name(parser), std::nullopt};
         case token_type_t::INT_CONSTANT:
-            return parse_constant(parser);
+            return parse_int_constant(parser);
+        case token_type_t::DOUBLE_CONSTANT:
+            return parse_double_constant(parser);
+        case token_type_t::CHAR_CONSTANT:
+            return parse_char_constant(parser);
         case token_type_t::LEFT_PAREN:
-            return parse_grouping(parser);
+            return {parse_grouping(parser), std::nullopt}; // I could set the type here since it is trivial, but it is slightly cleaner to just do it later in the validation/typing pass
         default:
+            std::cout << static_cast<std::uint32_t>(parser.peek_token().token_type) << std::endl;
             if(is_prefix_op(parser.peek_token())) {
                 auto op = parse_prefix_op(parser.advance_token());
                 auto r_bp = prefix_binding_power(op);
                 auto rhs = parse_expression(parser, r_bp);
-                return make_prefix_op(op, std::move(rhs));
+                return {make_prefix_op(op, std::move(rhs)), std::nullopt};
             }
             throw std::runtime_error("Invalid prefix expression.");
     }
@@ -310,7 +342,7 @@ std::string get_identifier_from_expression(const ast::expression_t& expr) {
             throw std::runtime_error("Expression is not an identifier.");
             return std::string("");
         }
-    }, expr);
+    }, expr.expr);
 }
 ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t precedence) {
     auto lhs = parse_prefix_expression(parser);
@@ -331,7 +363,7 @@ ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t pre
                 parser.advance_token();
             }
             parser.expect_token(token_type_t::RIGHT_PAREN, "Expected `)` in function call.");
-            lhs = std::make_shared<ast::function_call_t>(ast::function_call_t{get_identifier_from_expression(lhs), std::move(args)});
+            lhs = {std::make_shared<ast::function_call_t>(ast::function_call_t{get_identifier_from_expression(lhs), std::move(args)}), std::nullopt};
             continue;
         }
 
@@ -342,7 +374,7 @@ ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t pre
                 break;
             }
             parser.advance_token();
-            lhs = make_postfix_op(op, std::move(lhs));
+            lhs = {make_postfix_op(op, std::move(lhs)), std::nullopt};
             continue;
         }
 
@@ -354,14 +386,14 @@ ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t pre
             }
             parser.advance_token();
             auto rhs = parse_expression(parser, r_bp);
-            lhs = make_infix_op(op, std::move(lhs), std::move(rhs));
+            lhs = {make_infix_op(op, std::move(lhs), std::move(rhs)), std::nullopt};
             continue;
         }
 
         if(is_compound_assignment_op(parser.peek_token())) {
             auto op = get_op_from_compound_assignment_op(parser.peek_token());
             parser.advance_token();
-            lhs = make_infix_op(ast::binary_operator_token_t::ASSIGNMENT, validate_lvalue_expression_exp(lhs), make_infix_op(op, validate_lvalue_expression_exp(lhs), parse_expression(parser, precedence)));
+            lhs = {make_infix_op(ast::binary_operator_token_t::ASSIGNMENT, {validate_lvalue_expression_exp(lhs), std::nullopt}, {make_infix_op(op, {validate_lvalue_expression_exp(lhs), std::nullopt}, parse_expression(parser, precedence)), std::nullopt}), std::nullopt};
             continue;
         }
 
@@ -375,7 +407,7 @@ ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t pre
             auto if_true = parse_expression(parser, precedence);
             parser.expect_token(token_type_t::COLON, "Expected `:` in ternary expression.");
             auto if_false = parse_expression(parser, 28); // 28 is the highest level of precedence, we use this so it greedily parses `a < b ? a = 1 : a = 2` as `(a < b ? a = 1 : a) = 2` instead of `(a < b ? a = 1 : a = 2)`.
-            lhs = std::make_shared<ast::ternary_expression_t>(ast::ternary_expression_t{std::move(lhs), std::move(if_true), std::move(if_false)});
+            lhs = {std::make_shared<ast::ternary_expression_t>(ast::ternary_expression_t{std::move(lhs), std::move(if_true), std::move(if_false)}), std::nullopt};
             continue;
         }
 
@@ -454,8 +486,8 @@ ast::statement_t parse_statement(parser_t& parser) {
 
 ast::declaration_t parse_declaration(parser_t& parser) {
     const auto type_token = parser.advance_token();
-    if(type_token.token_type != token_type_t::INT_KEYWORD) {
-        throw std::runtime_error("expected `int` keyword");
+    if(type_token.token_type != token_type_t::INT_KEYWORD && type_token.token_type != token_type_t::DOUBLE_KEYWORD && type_token.token_type != token_type_t::CHAR_KEYWORD) {
+        throw std::runtime_error("expected `int`, `double`, or `char` keyword");
     }
 
     auto identifier_token = parser.advance_token();
@@ -464,7 +496,7 @@ ast::declaration_t parse_declaration(parser_t& parser) {
     }
 
     if(parser.peek_token().token_type != token_type_t::EQUALS) {
-        auto ret = ast::declaration_t{type_token, ast::var_name_t(identifier_token.token_text), std::nullopt};
+        auto ret = ast::declaration_t{create_type_name_from_token(type_token), ast::var_name_t(identifier_token.token_text), std::nullopt};
 
         parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in statement.");
 
@@ -473,7 +505,7 @@ ast::declaration_t parse_declaration(parser_t& parser) {
 
     parser.advance_token(); // consume `=` token
 
-    auto ret = ast::declaration_t{type_token, ast::var_name_t(identifier_token.token_text), parse_expression(parser)};
+    auto ret = ast::declaration_t{create_type_name_from_token(type_token), ast::var_name_t(identifier_token.token_text), parse_expression(parser)};
 
     parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in statement.");
 
@@ -489,7 +521,7 @@ ast::compound_statement_t parse_compound_statement(parser_t& parser) {
             throw std::runtime_error("Unexpected end of file. Unterminated compound statement.");
         }
 
-        if(parser.peek_token().token_type == token_type_t::INT_KEYWORD) {
+        if(parser.peek_token().token_type == token_type_t::INT_KEYWORD || parser.peek_token().token_type == token_type_t::DOUBLE_KEYWORD || parser.peek_token().token_type == token_type_t::CHAR_KEYWORD) {
             ret.stmts.push_back(parse_declaration(parser));
         } else {
             ret.stmts.push_back(parse_statement(parser));
@@ -517,7 +549,7 @@ static std::vector<std::pair<ast::type_name_t, std::optional<ast::var_name_t>>> 
             if(current_param[0].token_type != token_type_t::INT_KEYWORD) {
                 throw std::runtime_error("Expected identifier name (type name) in function declaration.");
             }
-            param_list.push_back({current_param[0], std::nullopt});
+            param_list.push_back({create_type_name_from_token(current_param[0]), std::nullopt});
         } else if(current_param.size() == 2) {
             // TODO: Only integer types are supported in parameter lists currently
             if(current_param[0].token_type != token_type_t::INT_KEYWORD) {
@@ -526,7 +558,7 @@ static std::vector<std::pair<ast::type_name_t, std::optional<ast::var_name_t>>> 
             if(current_param[1].token_type != token_type_t::IDENTIFIER) {
                 throw std::runtime_error("Expected identifier name (variable name) in function declaration.");
             }
-            param_list.push_back({current_param[0], std::make_optional(ast::var_name_t{current_param[1].token_text})});
+            param_list.push_back({create_type_name_from_token(current_param[0]), std::make_optional(ast::var_name_t{current_param[1].token_text})});
         } else {
             throw std::runtime_error("Unexpected token in function definition param list.");
         }
@@ -567,24 +599,24 @@ std::variant<ast::function_declaration_t, ast::function_definition_t, ast::globa
         if(parser.peek_token().token_type == token_type_t::SEMICOLON) {
             parser.advance_token();
 
-            return ast::function_declaration_t{ type_token, ast::func_name_t(name_token.token_text), parse_function_declaration_parameter_list(param_list) };
+            return ast::function_declaration_t{ create_type_name_from_token(type_token), ast::func_name_t(name_token.token_text), parse_function_declaration_parameter_list(param_list) };
         }
 
         ast::compound_statement_t statements = parse_compound_statement(parser);
 
         if(name_token.token_text == "main") {
-            constexpr std::size_t DEFAULT_RETURN_VALUE = 0;
+            constexpr int DEFAULT_RETURN_VALUE = 0;
             // use `has_return_statement` instead of `is_return_statement` because we don't need to emit a return statement if there already is one,
             //  even if there is unreachable code after the already existing return statement.
             if(statements.stmts.size() == 0 || !has_return_statement(statements)) {
-                statements.stmts.push_back(ast::return_statement_t { ast::expression_t{ast::constant_t{DEFAULT_RETURN_VALUE}} } );
+                statements.stmts.push_back(ast::return_statement_t { ast::expression_t{ ast::constant_t{DEFAULT_RETURN_VALUE}, ast::type_name_t{ast::type_category_t::INT, "int"} } } );
             }
         }
 
-        return ast::function_definition_t{ type_token, ast::func_name_t(name_token.token_text), std::move(param_list), std::move(statements) };
+        return ast::function_definition_t{ create_type_name_from_token(type_token), ast::func_name_t(name_token.token_text), std::move(param_list), std::move(statements) };
     } else {
         if(parser.peek_token().token_type != token_type_t::EQUALS) {
-            auto ret = ast::global_variable_declaration_t{type_token, ast::var_name_t(name_token.token_text), std::nullopt};
+            auto ret = ast::global_variable_declaration_t{create_type_name_from_token(type_token), ast::var_name_t(name_token.token_text), std::nullopt};
         
             parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in global variable declaration.");
 
@@ -593,7 +625,7 @@ std::variant<ast::function_declaration_t, ast::function_definition_t, ast::globa
 
         parser.advance_token(); // consume `=` token
 
-        auto ret = ast::global_variable_declaration_t{type_token, ast::var_name_t(name_token.token_text), parse_expression(parser)};
+        auto ret = ast::global_variable_declaration_t{create_type_name_from_token(type_token), ast::var_name_t(name_token.token_text), parse_expression(parser)};
 
         parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in global variable declaration.");
 

@@ -151,16 +151,26 @@ class validation_variable_lookup_t {
 public:
     validation_variable_lookup_t() = default;
 
-    bool contains_in_lowest_scope(const std::string& variable_name) const {
+    bool contains_in_lowest_scope(const ast::var_name_t& variable_name) const {
         return variables.peek().find(variable_name) != variables.peek().end();
     }
-    bool contains_in_accessible_scopes(const std::string& variable_name) {
+    bool contains_in_accessible_scopes(const ast::var_name_t& variable_name) const {
         for(std::uint32_t i = 0u; i < variables.size(); ++i) {
             if(variables.at(i).find(variable_name) != variables.at(i).end()) {
                 return true;
             }
         }
         return false;
+    }
+
+    ast::type_name_t find_in_accessible_scopes(const ast::var_name_t& variable_name) const {
+        for(std::uint32_t i = 0u; i < variables.size(); ++i) {
+            auto var_iter = variables.at(i).find(variable_name);
+            if(var_iter != variables.at(i).end()) {
+                return var_iter->second;
+            }
+        }
+        throw std::logic_error("Variable not found");
     }
 
     void add_new_variable_in_current_scope(const ast::var_name_t& variable_name, const ast::type_name_t& variable_type) {

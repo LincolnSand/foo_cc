@@ -44,11 +44,11 @@ enum class token_type_t : std::uint32_t {
     LEFT_SHIFT_EQUALS, RIGHT_SHIFT_EQUALS,
 
     // constants:
-    INT_CONSTANT,
+    INT_CONSTANT, DOUBLE_CONSTANT, CHAR_CONSTANT,
 
     IDENTIFIER,
     // reserved:
-    INT_KEYWORD,
+    INT_KEYWORD, DOUBLE_KEYWORD, CHAR_KEYWORD,
     RETURN_KEYWORD,
     IF_KEYWORD, ELSE_KEYWORD,
 
@@ -144,6 +144,7 @@ struct lexer_t {
 
 token_type_t handle_number(lexer_t& lexer);
 token_type_t handle_identifier(lexer_t& lexer);
+token_type_t handle_char(lexer_t& lexer);
 token_type_t handle_keywords(lexer_t& lexer);
 void handle_whitespace(lexer_t& lexer);
 // return `true` if comment is lexed, `false` otherwise

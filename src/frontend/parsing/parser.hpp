@@ -77,7 +77,7 @@ struct parser_t {
 };
 
 ast::var_name_t parse_var_name(parser_t& parser);
-ast::constant_t parse_constant(parser_t& parser);
+ast::expression_t parse_int_constant(parser_t& parser);
 std::shared_ptr<ast::grouping_t> parse_grouping(parser_t& parser);
 
 ast::expression_t parse_expression(parser_t& parser, ast::precedence_t precedence);
