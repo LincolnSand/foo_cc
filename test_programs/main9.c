@@ -3,6 +3,7 @@ int main() {
     char c = 'c';
     int i = 901;
     double j = 1000 * i;
-    i = 9; // Since assignment is technically a binary operator, mismatched types are unsupported, unlike for declarations (where the rhs is implicitly converted to the lhs's type).
-    double k = i + 2;
+    i = 9 + 7.8 * c;
+    double k = c + i * i;
+    !7.0;
 }

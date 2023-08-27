@@ -56,22 +56,18 @@ void validate_expression(validation_t& validation, ast::expression_t& expression
     std::visit(overloaded{
         [&validation, &expression](const std::shared_ptr<ast::grouping_t>& grouping_exp) {
             validate_expression(validation, grouping_exp->expr);
-            add_type_to_grouping(*grouping_exp, expression.type);
         },
         [&validation, &expression](const std::shared_ptr<ast::unary_expression_t>& unary_exp) {
             validate_expression(validation, unary_exp->exp);
-            add_type_to_unary_expression(*unary_exp, expression.type);
         },
         [&validation, &expression](const std::shared_ptr<ast::binary_expression_t>& bin_exp) {
             validate_expression(validation, bin_exp->left);
             validate_expression(validation, bin_exp->right);
-            add_type_to_binary_expression(*bin_exp, expression.type);
         },
         [&validation, &expression](const std::shared_ptr<ast::ternary_expression_t>& ternary) {
             validate_expression(validation, ternary->condition);
             validate_expression(validation, ternary->if_true);
             validate_expression(validation, ternary->if_false);
-            add_type_to_ternary(*ternary, expression.type); // `if_true` and `if_false` must have the same type or else this will throw, `expression.type` will be set to the type of the ternary branch expressions
         },
         [&validation, &expression](const std::shared_ptr<ast::function_call_t>& func_call) {
             validate_function_call(validation, *func_call);

@@ -116,7 +116,11 @@ void print_expression(const bool has_types, const ast::expression_t& expr) {
         }
     }, expr.expr);
     if(has_types) {
-        std::cout << " :: " << expr.type.value().type_name;
+        if(expr.type.has_value()) {
+            std::cout << " :: " << expr.type.value().type_name;
+        } else {
+            std::cout << " :: " << "UNDEFINED";
+        }
     }
     std::cout << ')';
 }

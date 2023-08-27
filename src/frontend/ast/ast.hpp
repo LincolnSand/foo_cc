@@ -8,6 +8,7 @@
 #include <iostream>
 #include <optional>
 #include <unordered_map>
+#include <cstddef>
 
 #include <frontend/lexing/lexer.hpp>
 #include <utils/common.hpp>
@@ -20,11 +21,13 @@ struct constant_t {
 };
 
 enum class type_category_t {
-    INT, DOUBLE, CHAR,
+    INT, DOUBLE,
 };
 struct type_name_t {
-    type_category_t token_type;
+    type_category_t token_type; // TODO: rename to `type_category` from `token_type`
     std::string type_name;
+    std::size_t size;
+    std::size_t alignment;
 };
 
 struct grouping_t;
@@ -143,7 +146,17 @@ struct validated_program_t {
 };
 }
 
-// defined in frontend/parsing/parser.cpp
+
+
+inline ast::expression_t make_convert_t(ast::expression_t&& expr, ast::type_name_t type) {
+    return ast::expression_t{ std::make_shared<ast::convert_t>(ast::convert_t{std::move(expr)}), type};
+}
+
+
+// defined in middle_end/typing/generate_typing.cpp:
+bool compare_type_names(const ast::type_name_t& lhs, const ast::type_name_t& rhs);
+
+// defined in frontend/parsing/parser.cpp:
 ast::type_name_t create_type_name_from_token(const token_t& token);
 bool has_return_statement(const ast::compound_statement_t& compound_stmt);
 

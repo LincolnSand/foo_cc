@@ -4,7 +4,7 @@
 #include <frontend/ast/ast.hpp>
 
 
-bool compare_type_names(const ast::type_name_t& lhs, const ast::type_name_t& rhs);
+bool is_convertible(const ast::type_name_t& lhs, const ast::type_name_t& rhs);
 
 void type_check_expression(ast::expression_t& expression);
 void type_check_statement(ast::statement_t& statement, const ast::type_name_t& function_return_type);

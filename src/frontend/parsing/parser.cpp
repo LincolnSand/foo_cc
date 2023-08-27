@@ -28,13 +28,35 @@ static ast::type_category_t get_type_category_from_token_type(token_type_t token
         case token_type_t::DOUBLE_KEYWORD:
             return ast::type_category_t::DOUBLE;
         case token_type_t::CHAR_CONSTANT:
-        case token_type_t::CHAR_KEYWORD:
-            return ast::type_category_t::CHAR;
+        case token_type_t::CHAR_KEYWORD: // char is just an 8 bit integer
+            return ast::type_category_t::INT;
     }
     throw std::runtime_error("Invalid/Unsupported type: [" + std::to_string(static_cast<std::uint32_t>(token_type)) + std::string("]"));
 }
+static std::size_t get_size_from_type(std::string_view token_text) {
+    if(token_text == "char") {
+        return sizeof(char);
+    } else if(token_text == "int") {
+        return sizeof(int);
+    } else if(token_text == "double") {
+        return sizeof(double);
+    } else {
+        throw std::runtime_error("Unsupported type: [" + std::string(token_text) + std::string("]"));
+    }
+}
+static std::size_t get_alignment_from_type(std::string_view token_text) {
+    if(token_text == "char") {
+        return sizeof(char);
+    } else if(token_text == "int") {
+        return sizeof(int);
+    } else if(token_text == "double") {
+        return sizeof(double);
+    } else {
+        throw std::runtime_error("Unsupported type: [" + std::string(token_text) + std::string("]"));
+    }
+}
 ast::type_name_t create_type_name_from_token(const token_t& token) {
-    return ast::type_name_t { get_type_category_from_token_type(token.token_type), std::string(token.token_text) };
+    return ast::type_name_t { get_type_category_from_token_type(token.token_type), std::string(token.token_text), get_size_from_type(token.token_text), get_alignment_from_type(token.token_text) };
 }
 bool has_return_statement(const ast::compound_statement_t& compound_stmt) {
     for(const auto& stmt : compound_stmt.stmts) {
@@ -65,13 +87,13 @@ ast::constant_t parse_constant(parser_t& parser) {
     return ast::constant_t { result };
 }
 ast::expression_t parse_int_constant(parser_t& parser) {
-    return ast::expression_t { parse_constant<int>(parser), ast::type_name_t{ast::type_category_t::INT, "int"} };
+    return ast::expression_t { parse_constant<int>(parser), ast::type_name_t{ast::type_category_t::INT, "int", sizeof(std::uint64_t), sizeof(std::uint64_t)} };
 }
 ast::expression_t parse_double_constant(parser_t& parser) {
-    return ast::expression_t { parse_constant<double>(parser), ast::type_name_t{ast::type_category_t::DOUBLE, "double"} };
+    return ast::expression_t { parse_constant<double>(parser), ast::type_name_t{ast::type_category_t::DOUBLE, "double", sizeof(double), sizeof(double)} };
 }
 ast::expression_t parse_char_constant(parser_t& parser) {
-    return ast::expression_t { ast::constant_t { parser.advance_token().token_text[1] }, ast::type_name_t{ast::type_category_t::CHAR, "char"} };
+    return ast::expression_t { ast::constant_t { parser.advance_token().token_text[1] }, ast::type_name_t{ast::type_category_t::INT, "char", sizeof(char), sizeof(char)} };
 }
 std::shared_ptr<ast::grouping_t> parse_grouping(parser_t& parser) {
     parser.advance_token();
@@ -140,7 +162,6 @@ ast::expression_t parse_prefix_expression(parser_t& parser) {
         case token_type_t::LEFT_PAREN:
             return {parse_grouping(parser), std::nullopt}; // I could set the type here since it is trivial, but it is slightly cleaner to just do it later in the validation/typing pass
         default:
-            std::cout << static_cast<std::uint32_t>(parser.peek_token().token_type) << std::endl;
             if(is_prefix_op(parser.peek_token())) {
                 auto op = parse_prefix_op(parser.advance_token());
                 auto r_bp = prefix_binding_power(op);
@@ -609,7 +630,7 @@ std::variant<ast::function_declaration_t, ast::function_definition_t, ast::globa
             // use `has_return_statement` instead of `is_return_statement` because we don't need to emit a return statement if there already is one,
             //  even if there is unreachable code after the already existing return statement.
             if(statements.stmts.size() == 0 || !has_return_statement(statements)) {
-                statements.stmts.push_back(ast::return_statement_t { ast::expression_t{ ast::constant_t{DEFAULT_RETURN_VALUE}, ast::type_name_t{ast::type_category_t::INT, "int"} } } );
+                statements.stmts.push_back(ast::return_statement_t { ast::expression_t{ ast::constant_t{DEFAULT_RETURN_VALUE}, ast::type_name_t{ast::type_category_t::INT, "int", sizeof(std::uint64_t), sizeof(std::uint64_t)} } } );
             }
         }
 
