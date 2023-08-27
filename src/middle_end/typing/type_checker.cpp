@@ -222,7 +222,33 @@ void type_check_binary_expression(std::optional<ast::type_name_t>& type, ast::bi
     }
 }
 void type_check_ternary_expression(std::optional<ast::type_name_t>& type, ast::ternary_expression_t& ternary_exp) {
+    if(!is_convertible(ternary_exp.condition.type.value(), ast::type_name_t{ast::type_category_t::INT, "int", sizeof(std::uint64_t), sizeof(std::uint64_t)})) {
+        throw std::runtime_error("Condition of ternary expression is of type: [" + ternary_exp.condition.type.value().type_name + "], which is not truthy.");
+    } 
 
+    if(is_convertible(ternary_exp.if_true.type.value(), ternary_exp.if_true.type.value())) {
+        if(compare_type_names(ternary_exp.if_true.type.value(), ternary_exp.if_true.type.value())) {
+            type = ternary_exp.if_true.type.value();
+        } else if(ternary_exp.if_true.type.value().token_type == ternary_exp.if_false.type.value().token_type) {
+            if(ternary_exp.if_true.type.value().size >= ternary_exp.if_false.type.value().size) {
+                type = ternary_exp.if_true.type.value();
+                ternary_exp.if_false = make_convert_t(std::move(ternary_exp.if_false), type.value());
+            } else {
+                type = ternary_exp.if_false.type.value();
+                ternary_exp.if_true = make_convert_t(std::move(ternary_exp.if_true), type.value());
+            }
+        } else if(ternary_exp.if_true.type.value().token_type == ast::type_category_t::DOUBLE) {
+            type = ternary_exp.if_true.type.value();
+            ternary_exp.if_false = make_convert_t(std::move(ternary_exp.if_false), type.value());
+        } else if(ternary_exp.if_false.type.value().token_type == ast::type_category_t::DOUBLE) {
+            type = ternary_exp.if_false.type.value();
+            ternary_exp.if_true = make_convert_t(std::move(ternary_exp.if_true), type.value());
+        } else {
+            throw std::logic_error("Unsupported types used for ternary operator body.");
+        }
+    } else {
+        throw std::runtime_error("Body of ternary expression types are not convertible.");
+    }
 }
 
 void type_check_expression(ast::expression_t& expression) {
