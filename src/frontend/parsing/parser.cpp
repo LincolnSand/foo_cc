@@ -87,7 +87,7 @@ ast::constant_t parse_constant(parser_t& parser) {
     return ast::constant_t { result };
 }
 ast::expression_t parse_int_constant(parser_t& parser) {
-    return ast::expression_t { parse_constant<int>(parser), ast::type_name_t{ast::type_category_t::INT, "int", sizeof(std::uint64_t), sizeof(std::uint64_t)} };
+    return ast::expression_t { parse_constant<int>(parser), ast::type_name_t{ast::type_category_t::INT, "int", sizeof(std::uint32_t), sizeof(std::uint32_t)} };
 }
 ast::expression_t parse_double_constant(parser_t& parser) {
     return ast::expression_t { parse_constant<double>(parser), ast::type_name_t{ast::type_category_t::DOUBLE, "double", sizeof(double), sizeof(double)} };
@@ -630,7 +630,7 @@ std::variant<ast::function_declaration_t, ast::function_definition_t, ast::globa
             // use `has_return_statement` instead of `is_return_statement` because we don't need to emit a return statement if there already is one,
             //  even if there is unreachable code after the already existing return statement.
             if(statements.stmts.size() == 0 || !has_return_statement(statements)) {
-                statements.stmts.push_back(ast::return_statement_t { ast::expression_t{ ast::constant_t{DEFAULT_RETURN_VALUE}, ast::type_name_t{ast::type_category_t::INT, "int", sizeof(std::uint64_t), sizeof(std::uint64_t)} } } );
+                statements.stmts.push_back(ast::return_statement_t { ast::expression_t{ ast::constant_t{DEFAULT_RETURN_VALUE}, ast::type_name_t{ast::type_category_t::INT, "int", sizeof(std::uint32_t), sizeof(std::uint32_t)} } } );
             }
         }
 

@@ -36,7 +36,7 @@ void type_check_unary_expression(std::optional<ast::type_name_t>& type, ast::una
             break;
         case ast::unary_operator_token_t::LOGICAL_NOT: // TODO: add support for bools
             if(unary_exp.exp.type.value().token_type != ast::type_category_t::INT || unary_exp.exp.type.value().token_type == ast::type_category_t::DOUBLE) {
-                type = ast::type_name_t{ast::type_category_t::INT, "int", sizeof(std::uint64_t), sizeof(std::uint64_t)};
+                type = ast::type_name_t{ast::type_category_t::INT, "int", sizeof(std::uint32_t), sizeof(std::uint32_t)};
             } else {
                 throw std::runtime_error("Logical not is only supported for primitive types.");
             }
@@ -144,7 +144,7 @@ void type_check_binary_expression(std::optional<ast::type_name_t>& type, ast::bi
         case ast::binary_operator_token_t::NOT_EQUAL:
             if((binary_exp.left.type.value().token_type == ast::type_category_t::INT || binary_exp.left.type.value().token_type == ast::type_category_t::DOUBLE) && (binary_exp.right.type.value().token_type == ast::type_category_t::INT || binary_exp.right.type.value().token_type == ast::type_category_t::DOUBLE)) {
                 // TODO: support booleans
-                type = ast::type_name_t{ast::type_category_t::INT, "int", sizeof(std::uint64_t), sizeof(std::uint64_t)};
+                type = ast::type_name_t{ast::type_category_t::INT, "int", sizeof(std::uint32_t), sizeof(std::uint32_t)};
 
                 if(!compare_type_names(binary_exp.left.type.value(), binary_exp.right.type.value())) {
                     if(binary_exp.left.type.value().token_type == ast::type_category_t::DOUBLE) {
@@ -184,7 +184,7 @@ void type_check_binary_expression(std::optional<ast::type_name_t>& type, ast::bi
         case ast::binary_operator_token_t::LOGICAL_AND:
         case ast::binary_operator_token_t::LOGICAL_OR:
             if((binary_exp.left.type.value().token_type == ast::type_category_t::INT || binary_exp.left.type.value().token_type == ast::type_category_t::DOUBLE) && (binary_exp.right.type.value().token_type == ast::type_category_t::INT || binary_exp.right.type.value().token_type == ast::type_category_t::DOUBLE)) {
-                type = ast::type_name_t{ast::type_category_t::INT, "int", sizeof(std::uint64_t), sizeof(std::uint64_t)};
+                type = ast::type_name_t{ast::type_category_t::INT, "int", sizeof(std::uint32_t), sizeof(std::uint32_t)};
 
                 if(binary_exp.left.type.value().type_name != "int") {
                     binary_exp.left = make_convert_t(std::move(binary_exp.left), type.value());
@@ -222,7 +222,7 @@ void type_check_binary_expression(std::optional<ast::type_name_t>& type, ast::bi
     }
 }
 void type_check_ternary_expression(std::optional<ast::type_name_t>& type, ast::ternary_expression_t& ternary_exp) {
-    if(!is_convertible(ternary_exp.condition.type.value(), ast::type_name_t{ast::type_category_t::INT, "int", sizeof(std::uint64_t), sizeof(std::uint64_t)})) {
+    if(!is_convertible(ternary_exp.condition.type.value(), ast::type_name_t{ast::type_category_t::INT, "int", sizeof(std::uint32_t), sizeof(std::uint32_t)})) {
         throw std::runtime_error("Condition of ternary expression is of type: [" + ternary_exp.condition.type.value().type_name + "], which is not truthy.");
     } 
 

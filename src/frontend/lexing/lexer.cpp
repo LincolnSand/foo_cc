@@ -7,7 +7,7 @@ token_type_t handle_number(lexer_t& lexer) {
     }
     if(lexer.peek_char() != '.') {
         return token_type_t::INT_CONSTANT;
-    }
+    } // TODO: make an else clause that lexes suffixes
     lexer.advance_char();
     while(utils::is_digit(lexer.peek_char())) {
         lexer.advance_char();
