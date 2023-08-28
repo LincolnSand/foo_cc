@@ -1,7 +1,7 @@
 #include <middle_end/validation/validate_ast.hpp>
 
 
-bool compare_type_names(const ast::type_name_t& lhs, const ast::type_name_t& rhs) {
+bool compare_type_names(const ast::type_t& lhs, const ast::type_t& rhs) {
     if(lhs.token_type == rhs.token_type) {
         if(lhs.type_name == rhs.type_name) {
             return true;
@@ -10,7 +10,7 @@ bool compare_type_names(const ast::type_name_t& lhs, const ast::type_name_t& rhs
     return false;
 }
 
-static ast::type_name_t get_type_of_function(const validation_t& validation, const ast::func_name_t& function_name) {
+static ast::type_t get_type_of_function(const validation_t& validation, const ast::func_name_t& function_name) {
     if(utils::contains(validation.function_declarations_lookup, function_name)) {
         return validation.function_declarations_lookup.at(function_name).return_type;
     }
@@ -19,7 +19,7 @@ static ast::type_name_t get_type_of_function(const validation_t& validation, con
     }
     throw std::logic_error("Function [" + function_name + "] is not declared.");
 }
-static ast::type_name_t get_type_of_variable(const validation_t& validation, const ast::var_name_t& variable_name) {
+static ast::type_t get_type_of_variable(const validation_t& validation, const ast::var_name_t& variable_name) {
     if(validation.variable_lookup.contains_in_accessible_scopes(variable_name)) {
         return validation.variable_lookup.find_in_accessible_scopes(variable_name);
     }
@@ -32,9 +32,9 @@ static ast::type_name_t get_type_of_variable(const validation_t& validation, con
     throw std::logic_error("Variable [" + variable_name + "] is not declared.");
 }
 
-void add_type_to_function_call(const validation_t& validation, const ast::function_call_t& expr, std::optional<ast::type_name_t>& exp_type) {
+void add_type_to_function_call(const validation_t& validation, const ast::function_call_t& expr, std::optional<ast::type_t>& exp_type) {
     exp_type = get_type_of_function(validation, expr.function_name);
 }
-void add_type_to_variable(const validation_t& validation, const ast::var_name_t& expr, std::optional<ast::type_name_t>& exp_type) {
+void add_type_to_variable(const validation_t& validation, const ast::var_name_t& expr, std::optional<ast::type_t>& exp_type) {
     exp_type = get_type_of_variable(validation, expr);
 }

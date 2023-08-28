@@ -20,7 +20,7 @@ struct validation_t {
 };
 
 
-void validate_type_name(const ast::type_name_t& expected, const ast::type_name_t& actual, const std::string& error_message);
+void validate_type_name(const ast::type_t& expected, const ast::type_t& actual, const std::string& error_message);
 
 void validate_variable(validation_t& validation, const ast::var_name_t& var_name);
 void validate_variable_declaration(validation_t& validation, ast::declaration_t& declaration);
@@ -38,9 +38,9 @@ ast::validated_program_t validate_ast(const ast::program_t& program);
 // defined in middle_end/typing/generate_typing.cpp:
 
 // `exp_type` is an outparam
-void add_type_to_grouping(const ast::grouping_t& expr, std::optional<ast::type_name_t>& exp_type);
-void add_type_to_unary_expression(const ast::unary_expression_t& expr, std::optional<ast::type_name_t>& exp_type);
-void add_type_to_binary_expression(const ast::binary_expression_t& expr, std::optional<ast::type_name_t>& exp_type);
-void add_type_to_ternary(const ast::ternary_expression_t& expr, std::optional<ast::type_name_t>& exp_type);
-void add_type_to_function_call(const validation_t& validation, const ast::function_call_t& expr, std::optional<ast::type_name_t>& exp_type);
-void add_type_to_variable(const validation_t& validation, const ast::var_name_t& expr, std::optional<ast::type_name_t>& exp_type);
+void add_type_to_grouping(const ast::grouping_t& expr, std::optional<ast::type_t>& exp_type);
+void add_type_to_unary_expression(const ast::unary_expression_t& expr, std::optional<ast::type_t>& exp_type);
+void add_type_to_binary_expression(const ast::binary_expression_t& expr, std::optional<ast::type_t>& exp_type);
+void add_type_to_ternary(const ast::ternary_expression_t& expr, std::optional<ast::type_t>& exp_type);
+void add_type_to_function_call(const validation_t& validation, const ast::function_call_t& expr, std::optional<ast::type_t>& exp_type);
+void add_type_to_variable(const validation_t& validation, const ast::var_name_t& expr, std::optional<ast::type_t>& exp_type);

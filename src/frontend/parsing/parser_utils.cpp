@@ -2,7 +2,20 @@
 
 
 bool is_constant(token_t token) {
-    return token.token_type == token_type_t::INT_CONSTANT || token.token_type == token_type_t::DOUBLE_CONSTANT || token.token_type == token_type_t::CHAR_CONSTANT;
+    switch(token.token_type) {
+        case token_type_t::CHAR_CONSTANT:
+        case token_type_t::INT_CONSTANT:
+        case token_type_t::UNSIGNED_INT_CONSTANT:
+        case token_type_t::LONG_CONSTANT:
+        case token_type_t::UNSIGNED_LONG_CONSTANT:
+        case token_type_t::LONG_LONG_CONSTANT:
+        case token_type_t::UNSIGNED_LONG_LONG_CONSTANT:
+        case token_type_t::FLOAT_CONSTANT:
+        case token_type_t::DOUBLE_CONSTANT:
+        case token_type_t::LONG_DOUBLE_CONSTANT:
+            return true;
+    }
+    return false;
 }
 bool is_var_name(token_t token) {
     return token.token_type == token_type_t::IDENTIFIER;

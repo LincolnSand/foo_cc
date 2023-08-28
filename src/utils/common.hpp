@@ -4,6 +4,7 @@
 #include <charconv>
 #include <unordered_map>
 #include <string_view>
+#include <cctype>
 
 
 template<class... Ts>
@@ -27,11 +28,16 @@ inline bool is_alpha_num(const char c) {
     return is_alpha(c) || is_digit(c);
 }
 
-template<typename T>
-inline bool str_to_int(std::string_view s, T& value) {
-    if(s.empty()) return false;
+inline bool match_caseless_char(const char c1, const char c2) {
+    return tolower(c1) == tolower(c2);
+}
 
-    auto result = std::from_chars(s.data(), s.data() + s.size(), value);
+template<typename T>
+inline bool str_to_T(std::string_view s, T& value, const std::size_t suffix_size = 0u) {
+    if(s.empty()) return false;
+    if(s.size() <= suffix_size) return false;
+
+    auto result = std::from_chars(s.data(), (s.data() + s.size()) - suffix_size, value);
 
     if(result.ec == std::errc::invalid_argument) return false;
 

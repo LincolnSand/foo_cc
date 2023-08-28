@@ -1,9 +1,9 @@
 int main() {
-    double e = 2.71828;
+    double e = 2.71828L;
     char c = 'c';
-    int i = 901;
-    double j = 1000 * i;
-    i = 9 + 7.8 * c;
-    double k = c + i * i;
+    short i = 901LLU;
+    double j = 1000l * i;
+    i = 9 + 7.8L * c;
+    double k = c + i * i - 2u;
     !7.0;
 }

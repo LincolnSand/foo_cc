@@ -1,7 +1,7 @@
 #include "validate_ast.hpp"
 
 
-void validate_type_name(const ast::type_name_t& expected, const ast::type_name_t& actual, const std::string& error_message) {
+void validate_type_name(const ast::type_t& expected, const ast::type_t& actual, const std::string& error_message) {
     if(expected.token_type != actual.token_type) { // optimization to avoid having to do string comparisons for built-in types
         if(expected.type_name != actual.type_name) {
             throw std::runtime_error(error_message);

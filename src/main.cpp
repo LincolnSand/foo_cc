@@ -29,6 +29,10 @@ int main(int argc, char** argv) {
         lexer_t lexer(file_contents.c_str());
         std::vector<token_t> tokens_list = scan_all_tokens(lexer);
 
+        for(const auto& token : tokens_list) {
+            std::cout << "token: " << static_cast<std::uint32_t>(token.token_type) << ": " << token.token_text << std::endl;
+        }
+
         parser_t parser(tokens_list);
         ast::program_t ast = parse(parser);
 

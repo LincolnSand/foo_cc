@@ -9,6 +9,7 @@
 #include <optional>
 #include <unordered_map>
 #include <cstddef>
+#include <cassert>
 
 #include <frontend/lexing/lexer.hpp>
 #include <utils/common.hpp>
@@ -17,13 +18,14 @@
 namespace ast {
 using var_name_t = std::string;
 struct constant_t {
-    std::variant<int, double, char> value;
+    // TODO: maybe use <cstdint> type aliases instead so our type sizes aren't host architecture dependent
+    std::variant<char, signed char, unsigned char, short, unsigned short, int, unsigned int, long, unsigned long, long long, unsigned long long, float, double, long double> value;
 };
 
 enum class type_category_t {
-    INT, DOUBLE,
+    INT, UNSIGNED_INT, DOUBLE,
 };
-struct type_name_t {
+struct type_t {
     type_category_t token_type; // TODO: rename to `type_category` from `token_type`
     std::string type_name;
     std::size_t size;
@@ -40,7 +42,7 @@ struct function_call_t;
 // TODO: maybe use `std::unique_ptr` instead of `std::shared_ptr`
 struct expression_t {
     std::variant<std::shared_ptr<grouping_t>, std::shared_ptr<convert_t>, std::shared_ptr<unary_expression_t>, std::shared_ptr<binary_expression_t>, std::shared_ptr<ternary_expression_t>, std::shared_ptr<function_call_t>, constant_t, var_name_t> expr;
-    std::optional<type_name_t> type; // usually has `std::nullopt` if not a literal after initial parsing stage. Is filled in during semantic analysis and type checking pass (as we often need symbol tables).
+    std::optional<type_t> type; // usually has `std::nullopt` if not a literal after initial parsing stage. Is filled in during semantic analysis and type checking pass (as we often need symbol tables).
 };
 
 struct grouping_t { // grouped with `( <expr> )`
@@ -96,7 +98,7 @@ struct return_statement_t {
     expression_t expr;
 };
 struct declaration_t {
-    type_name_t type_name;
+    type_t type_name;
     var_name_t var_name;
     std::optional<expression_t> value;
 };
@@ -119,14 +121,14 @@ struct if_statement_t {
 
 using func_name_t = std::string;
 struct function_declaration_t {
-    type_name_t return_type;
+    type_t return_type;
     func_name_t function_name;
-    std::vector<type_name_t> params;
+    std::vector<type_t> params;
 };
 struct function_definition_t {
-    type_name_t return_type;
+    type_t return_type;
     func_name_t function_name;
-    std::vector<std::pair<type_name_t, std::optional<var_name_t>>> params;
+    std::vector<std::pair<type_t, std::optional<var_name_t>>> params;
     compound_statement_t statements;
 };
 
@@ -137,7 +139,7 @@ struct program_t {
 };
 
 struct validated_global_variable_definition_t {
-    type_name_t type_name;
+    type_t type_name;
     var_name_t var_name;
     constant_t value; // is set to `0` if the variable is declared, but not defined in `program_t`
 };
@@ -148,15 +150,15 @@ struct validated_program_t {
 
 
 
-inline ast::expression_t make_convert_t(ast::expression_t&& expr, ast::type_name_t type) {
+inline ast::expression_t make_convert_t(ast::expression_t&& expr, ast::type_t type) {
     return ast::expression_t{ std::make_shared<ast::convert_t>(ast::convert_t{std::move(expr)}), type};
 }
 
 
 // defined in middle_end/typing/generate_typing.cpp:
-bool compare_type_names(const ast::type_name_t& lhs, const ast::type_name_t& rhs);
+bool compare_type_names(const ast::type_t& lhs, const ast::type_t& rhs);
 
 // defined in frontend/parsing/parser.cpp:
-ast::type_name_t create_type_name_from_token(const token_t& token);
+ast::type_t create_type_name_from_token(const token_t& token);
 bool has_return_statement(const ast::compound_statement_t& compound_stmt);
 

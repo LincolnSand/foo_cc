@@ -70,7 +70,9 @@ struct parser_t {
     }
 
     void expect_token(const token_type_t expected, const char *const error_message) {
-        if(advance_token().token_type != expected) {
+        const auto actual_token = advance_token();
+        if(actual_token.token_type != expected) {
+            std::cout << "Found token: " << static_cast<std::uint32_t>(actual_token.token_type) << ": " << actual_token.token_text << std::endl;
             throw std::runtime_error(error_message);
         }
     }

@@ -12,6 +12,7 @@
 #include <iostream>
 
 
+// TODO: add support for `short` and `signed` keywords for integer types
 enum class token_type_t : std::uint32_t {
     // single character lexemes:
     LEFT_PAREN = 0, RIGHT_PAREN,
@@ -44,11 +45,15 @@ enum class token_type_t : std::uint32_t {
     LEFT_SHIFT_EQUALS, RIGHT_SHIFT_EQUALS,
 
     // constants:
-    INT_CONSTANT, DOUBLE_CONSTANT, CHAR_CONSTANT,
+    CHAR_CONSTANT, INT_CONSTANT, UNSIGNED_INT_CONSTANT, LONG_CONSTANT, UNSIGNED_LONG_CONSTANT, LONG_LONG_CONSTANT, UNSIGNED_LONG_LONG_CONSTANT,
+    FLOAT_CONSTANT, DOUBLE_CONSTANT, LONG_DOUBLE_CONSTANT,
 
     IDENTIFIER,
     // reserved:
-    INT_KEYWORD, DOUBLE_KEYWORD, CHAR_KEYWORD,
+    SIGNED_KEYWORD, UNSIGNED_KEYWORD,
+    CHAR_KEYWORD, SIGNED_CHAR_KEYWORD, UNSIGNED_CHAR_KEYWORD, SHORT_KEYWORD, UNSIGNED_SHORT_KEYWORD, INT_KEYWORD, UNSIGNED_INT_KEYWORD, LONG_KEYWORD, UNSIGNED_LONG_KEYWORD, LONG_LONG_KEYWORD, UNSIGNED_LONG_LONG_KEYWORD,
+    FLOAT_KEYWORD, DOUBLE_KEYWORD, LONG_DOUBLE_KEYWORD,
+
     RETURN_KEYWORD,
     IF_KEYWORD, ELSE_KEYWORD,
 
@@ -151,4 +156,5 @@ void handle_whitespace(lexer_t& lexer);
 bool handle_comment(lexer_t& lexer);
 
 token_t scan_token(lexer_t& lexer);
-std::vector<token_t> scan_all_tokens(lexer_t& lexer);
+std::vector<token_t> merge_tokens(const std::vector<token_t>& tokens);
+std::vector<token_t> scan_all_tokens(lexer_t& lexer); // internally calls `merge_tokens()`

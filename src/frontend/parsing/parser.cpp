@@ -21,42 +21,109 @@ static bool is_return_statement(const std::variant<ast::statement_t, ast::declar
 // declared in frontend/ast/ast.hpp and used in both this file and backend/x86_64/traverse_ast.hpp
 static ast::type_category_t get_type_category_from_token_type(token_type_t token_type) {
     switch(token_type) {
+        case token_type_t::CHAR_CONSTANT:
+        case token_type_t::CHAR_KEYWORD:
+        case token_type_t::SIGNED_CHAR_KEYWORD:
+        case token_type_t::UNSIGNED_CHAR_KEYWORD:
+        case token_type_t::SHORT_KEYWORD:
+        case token_type_t::UNSIGNED_SHORT_KEYWORD:
         case token_type_t::INT_CONSTANT:
         case token_type_t::INT_KEYWORD:
+        case token_type_t::UNSIGNED_INT_CONSTANT:
+        case token_type_t::UNSIGNED_INT_KEYWORD:
+        case token_type_t::LONG_CONSTANT:
+        case token_type_t::LONG_KEYWORD:
+        case token_type_t::UNSIGNED_LONG_CONSTANT:
+        case token_type_t::UNSIGNED_LONG_KEYWORD:
+        case token_type_t::LONG_LONG_CONSTANT:
+        case token_type_t::LONG_LONG_KEYWORD:
+        case token_type_t::UNSIGNED_LONG_LONG_CONSTANT:
+        case token_type_t::UNSIGNED_LONG_LONG_KEYWORD:
             return ast::type_category_t::INT;
+        case token_type_t::FLOAT_CONSTANT:
+        case token_type_t::FLOAT_KEYWORD:
         case token_type_t::DOUBLE_CONSTANT:
         case token_type_t::DOUBLE_KEYWORD:
+        case token_type_t::LONG_DOUBLE_CONSTANT:
+        case token_type_t::LONG_DOUBLE_KEYWORD:
             return ast::type_category_t::DOUBLE;
-        case token_type_t::CHAR_CONSTANT:
-        case token_type_t::CHAR_KEYWORD: // char is just an 8 bit integer
-            return ast::type_category_t::INT;
     }
     throw std::runtime_error("Invalid/Unsupported type: [" + std::to_string(static_cast<std::uint32_t>(token_type)) + std::string("]"));
 }
-static std::size_t get_size_from_type(std::string_view token_text) {
-    if(token_text == "char") {
-        return sizeof(char);
-    } else if(token_text == "int") {
-        return sizeof(int);
-    } else if(token_text == "double") {
-        return sizeof(double);
+static std::string get_type_name_from_token(token_t token) {
+    // TODO: Write utility function to remove code duplication in these if statement conditionals
+    if(token.token_type == token_type_t::CHAR_CONSTANT) {
+        return "char";
+    } else if(token.token_type == token_type_t::INT_CONSTANT) {
+        return "int";
+    } else if(token.token_type == token_type_t::UNSIGNED_INT_CONSTANT) {
+        return "unsigned int";
+    } else if(token.token_type == token_type_t::LONG_CONSTANT) {
+        return "long";
+    } else if(token.token_type == token_type_t::UNSIGNED_LONG_CONSTANT) {
+        return "unsigned long";
+    } else if(token.token_type == token_type_t::LONG_LONG_CONSTANT) {
+        return "long long";
+    } else if(token.token_type == token_type_t::UNSIGNED_LONG_LONG_CONSTANT) {
+        return "unsigned long long";
+    } else if(token.token_type == token_type_t::FLOAT_CONSTANT) {
+        return "float";
+    } else if(token.token_type == token_type_t::DOUBLE_CONSTANT) {
+        return "double";
+    } else if(token.token_type == token_type_t::LONG_DOUBLE_CONSTANT) {
+        return "long double";
     } else {
-        throw std::runtime_error("Unsupported type: [" + std::string(token_text) + std::string("]"));
+        return std::string(token.token_text);
     }
 }
-static std::size_t get_alignment_from_type(std::string_view token_text) {
-    if(token_text == "char") {
+static std::size_t get_size_from_type(const std::string& type_name) {
+    if(type_name == "char" || type_name == "signed char" || type_name == "unsigned char") {
         return sizeof(char);
-    } else if(token_text == "int") {
-        return sizeof(int);
-    } else if(token_text == "double") {
+    } else if(type_name == "short" || type_name == "unsigned short") {
+        return sizeof(std::uint16_t);
+    } else if(type_name == "int" || type_name == "unsigned int") {
+        return sizeof(std::uint32_t);
+    } else if(type_name == "long" || type_name == "unsigned long") {
+        return sizeof(std::uint64_t);
+    } else if(type_name == "long long" || type_name == "unsigned long long") {
+        return sizeof(std::uint64_t);
+    } else if(type_name == "float") {
+        return sizeof(float);
+    } else if(type_name == "double") {
         return sizeof(double);
+    } else if(type_name == "long double") {
+        return sizeof(long double);
     } else {
-        throw std::runtime_error("Unsupported type: [" + std::string(token_text) + std::string("]"));
+        throw std::runtime_error("Unsupported type: [" + type_name + std::string("]"));
     }
 }
-ast::type_name_t create_type_name_from_token(const token_t& token) {
-    return ast::type_name_t { get_type_category_from_token_type(token.token_type), std::string(token.token_text), get_size_from_type(token.token_text), get_alignment_from_type(token.token_text) };
+static std::size_t get_alignment_from_type(const std::string& type_name) {
+    // `get_alignment_from_type()` and `get_size_from_type()` will diverge once we implement structs and other non-primitive types
+    if(type_name == "char" || type_name == "signed char" || type_name == "unsigned char") {
+        return alignof(char);
+    } else if(type_name == "short" || type_name == "unsigned short") {
+        return alignof(std::uint16_t);
+    } else if(type_name == "int" || type_name == "unsigned int") {
+        return alignof(std::uint32_t);
+    } else if(type_name == "long" || type_name == "unsigned long") {
+        return alignof(std::uint64_t);
+    } else if(type_name == "long long" || type_name == "unsigned long long") {
+        return alignof(std::uint64_t);
+    } else if(type_name == "float") {
+        return alignof(float);
+    } else if(type_name == "double") {
+        return alignof(double);
+    } else if(type_name == "long double") {
+        return alignof(long double);
+    } else {
+        throw std::runtime_error("Unsupported type: [" + type_name + std::string("]"));
+    }
+}
+ast::type_t create_type_name_from_token(const token_t& token) {
+    std::string type_name = get_type_name_from_token(token);
+    const std::size_t type_size = get_size_from_type(type_name);
+    const std::size_t alignment_size = get_alignment_from_type(type_name);
+    return ast::type_t { get_type_category_from_token_type(token.token_type), std::move(type_name), type_size, alignment_size };
 }
 bool has_return_statement(const ast::compound_statement_t& compound_stmt) {
     for(const auto& stmt : compound_stmt.stmts) {
@@ -76,24 +143,45 @@ ast::var_name_t parse_var_name(parser_t& parser) {
     return ast::var_name_t { identifier_token.token_text };
 }
 template<typename T>
-ast::constant_t parse_constant(parser_t& parser) {
+ast::constant_t parse_constant(parser_t& parser, const std::size_t suffix_size = 0u) {
     auto next = parser.advance_token();
     if(!is_constant(next)) {
         throw std::runtime_error("Invalid constant: [" + std::to_string(static_cast<std::uint32_t>(next.token_type)) + std::string("]"));
     }
 
     T result{};
-    utils::str_to_int(next.token_text, result);
+    utils::str_to_T(next.token_text, result, suffix_size);
     return ast::constant_t { result };
 }
+ast::expression_t parse_char_constant(parser_t& parser) {
+    return ast::expression_t { ast::constant_t { parser.advance_token().token_text[1] }, ast::type_t{ast::type_category_t::INT, "char", sizeof(char), sizeof(char)} };
+}
 ast::expression_t parse_int_constant(parser_t& parser) {
-    return ast::expression_t { parse_constant<int>(parser), ast::type_name_t{ast::type_category_t::INT, "int", sizeof(std::uint32_t), sizeof(std::uint32_t)} };
+    return ast::expression_t { parse_constant<int>(parser), ast::type_t{ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t)} };
+}
+ast::expression_t parse_unsigned_int_constant(parser_t& parser) {
+    return ast::expression_t { parse_constant<unsigned int>(parser, 1), ast::type_t{ast::type_category_t::UNSIGNED_INT, "unsigned int", sizeof(std::int32_t), alignof(std::int32_t)} };
+}
+ast::expression_t parse_long_constant(parser_t& parser) {
+    return ast::expression_t { parse_constant<long>(parser, 1), ast::type_t{ast::type_category_t::INT, "long", sizeof(std::int64_t), alignof(std::int64_t)} };
+}
+ast::expression_t parse_unsigned_long_constant(parser_t& parser) {
+    return ast::expression_t { parse_constant<unsigned long>(parser, 2), ast::type_t{ast::type_category_t::UNSIGNED_INT, "unsigned long", sizeof(std::uint64_t), alignof(std::uint64_t)} };
+}
+ast::expression_t parse_long_long_constant(parser_t& parser) {
+    return ast::expression_t { parse_constant<long long>(parser, 2), ast::type_t{ast::type_category_t::INT, "long long", sizeof(std::int64_t), alignof(std::int64_t)} };
+}
+ast::expression_t parse_unsigned_long_long_constant(parser_t& parser) {
+    return ast::expression_t { parse_constant<unsigned long long>(parser, 3), ast::type_t{ast::type_category_t::UNSIGNED_INT, "unsigned long long", sizeof(std::uint64_t), alignof(std::uint64_t)} };
+}
+ast::expression_t parse_float_constant(parser_t& parser) {
+    return ast::expression_t { parse_constant<float>(parser, 1), ast::type_t{ast::type_category_t::DOUBLE, "float", sizeof(float), alignof(float)} };
 }
 ast::expression_t parse_double_constant(parser_t& parser) {
-    return ast::expression_t { parse_constant<double>(parser), ast::type_name_t{ast::type_category_t::DOUBLE, "double", sizeof(double), sizeof(double)} };
+    return ast::expression_t { parse_constant<double>(parser), ast::type_t{ast::type_category_t::DOUBLE, "double", sizeof(double), alignof(double)} };
 }
-ast::expression_t parse_char_constant(parser_t& parser) {
-    return ast::expression_t { ast::constant_t { parser.advance_token().token_text[1] }, ast::type_name_t{ast::type_category_t::INT, "char", sizeof(char), sizeof(char)} };
+ast::expression_t parse_long_double_constant(parser_t& parser) {
+    return ast::expression_t { parse_constant<long double>(parser, 1), ast::type_t{ast::type_category_t::DOUBLE, "long double", sizeof(long double), alignof(long double)} };
 }
 std::shared_ptr<ast::grouping_t> parse_grouping(parser_t& parser) {
     parser.advance_token();
@@ -150,15 +238,30 @@ std::shared_ptr<ast::unary_expression_t> make_prefix_op(const ast::unary_operato
     return std::make_shared<ast::unary_expression_t>(ast::unary_expression_t{ast::unary_operator_fixity_t::PREFIX, op, std::move(rhs)});
 }
 ast::expression_t parse_prefix_expression(parser_t& parser) {
+    std::cout << "Non-Error Prefix Expression: " << static_cast<std::uint32_t>(parser.peek_token().token_type) << ": " << parser.peek_token().token_text << std::endl;
     switch(parser.peek_token().token_type) {
         case token_type_t::IDENTIFIER:
             return {parse_var_name(parser), std::nullopt};
-        case token_type_t::INT_CONSTANT:
-            return parse_int_constant(parser);
-        case token_type_t::DOUBLE_CONSTANT:
-            return parse_double_constant(parser);
         case token_type_t::CHAR_CONSTANT:
             return parse_char_constant(parser);
+        case token_type_t::INT_CONSTANT:
+            return parse_int_constant(parser);
+        case token_type_t::UNSIGNED_INT_CONSTANT:
+            return parse_unsigned_int_constant(parser);
+        case token_type_t::LONG_CONSTANT:
+            return parse_long_constant(parser);
+        case token_type_t::UNSIGNED_LONG_CONSTANT:
+            return parse_unsigned_long_constant(parser);
+        case token_type_t::LONG_LONG_CONSTANT:
+            return parse_long_long_constant(parser);
+        case token_type_t::UNSIGNED_LONG_LONG_CONSTANT:
+            return parse_unsigned_long_long_constant(parser);
+        case token_type_t::FLOAT_CONSTANT:
+            return parse_float_constant(parser);
+        case token_type_t::DOUBLE_CONSTANT:
+            return parse_double_constant(parser);
+        case token_type_t::LONG_DOUBLE_CONSTANT:
+            return parse_long_double_constant(parser);
         case token_type_t::LEFT_PAREN:
             return {parse_grouping(parser), std::nullopt}; // I could set the type here since it is trivial, but it is slightly cleaner to just do it later in the validation/typing pass
         default:
@@ -168,6 +271,7 @@ ast::expression_t parse_prefix_expression(parser_t& parser) {
                 auto rhs = parse_expression(parser, r_bp);
                 return {make_prefix_op(op, std::move(rhs)), std::nullopt};
             }
+            std::cout << static_cast<std::uint32_t>(parser.peek_token().token_type) << ": " << parser.peek_token().token_text << std::endl;
             throw std::runtime_error("Invalid prefix expression.");
     }
 }
@@ -504,11 +608,32 @@ ast::statement_t parse_statement(parser_t& parser) {
     }
     return parse_expression_statement(parser);
 }
-
+// TODO: maybe pull out and make globally accessible
+static bool is_keyword_a_type(token_type_t token_type) {
+    switch(token_type) {
+        case token_type_t::CHAR_KEYWORD:
+        case token_type_t::SIGNED_CHAR_KEYWORD:
+        case token_type_t::UNSIGNED_CHAR_KEYWORD:
+        case token_type_t::SHORT_KEYWORD:
+        case token_type_t::UNSIGNED_SHORT_KEYWORD:
+        case token_type_t::INT_KEYWORD:
+        case token_type_t::UNSIGNED_INT_KEYWORD:
+        case token_type_t::LONG_KEYWORD:
+        case token_type_t::UNSIGNED_LONG_KEYWORD:
+        case token_type_t::LONG_LONG_KEYWORD:
+        case token_type_t::UNSIGNED_LONG_LONG_KEYWORD:
+        case token_type_t::FLOAT_KEYWORD:
+        case token_type_t::DOUBLE_KEYWORD:
+        case token_type_t::LONG_DOUBLE_KEYWORD:
+            return true;
+    }
+    return false;
+}
 ast::declaration_t parse_declaration(parser_t& parser) {
     const auto type_token = parser.advance_token();
-    if(type_token.token_type != token_type_t::INT_KEYWORD && type_token.token_type != token_type_t::DOUBLE_KEYWORD && type_token.token_type != token_type_t::CHAR_KEYWORD) {
-        throw std::runtime_error("expected `int`, `double`, or `char` keyword");
+    if(!is_keyword_a_type(type_token.token_type)) {
+        std::cout << static_cast<std::uint32_t>(type_token.token_type) << ": " << type_token.token_text << std::endl;
+        throw std::runtime_error("Expected type name in declaration.");
     }
 
     auto identifier_token = parser.advance_token();
@@ -542,7 +667,7 @@ ast::compound_statement_t parse_compound_statement(parser_t& parser) {
             throw std::runtime_error("Unexpected end of file. Unterminated compound statement.");
         }
 
-        if(parser.peek_token().token_type == token_type_t::INT_KEYWORD || parser.peek_token().token_type == token_type_t::DOUBLE_KEYWORD || parser.peek_token().token_type == token_type_t::CHAR_KEYWORD) {
+        if(is_keyword_a_type(parser.peek_token().token_type)) {
             ret.stmts.push_back(parse_declaration(parser));
         } else {
             ret.stmts.push_back(parse_statement(parser));
@@ -552,8 +677,8 @@ ast::compound_statement_t parse_compound_statement(parser_t& parser) {
 
     return ret;
 }
-static std::vector<std::pair<ast::type_name_t, std::optional<ast::var_name_t>>> parse_function_definition_parameter_list(parser_t& parser) {
-    std::vector<std::pair<ast::type_name_t, std::optional<ast::var_name_t>>> param_list;
+static std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>> parse_function_definition_parameter_list(parser_t& parser) {
+    std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>> param_list;
     for(;;) {
         std::vector<token_t> current_param;
         while(parser.peek_token().token_type != token_type_t::COMMA && parser.peek_token().token_type != token_type_t::RIGHT_PAREN) {
@@ -594,8 +719,8 @@ static std::vector<std::pair<ast::type_name_t, std::optional<ast::var_name_t>>> 
     }
     return param_list;
 }
-static std::vector<ast::type_name_t> parse_function_declaration_parameter_list(std::vector<std::pair<ast::type_name_t, std::optional<ast::var_name_t>>> list_with_names) {
-    std::vector<ast::type_name_t> ret_type_list;
+static std::vector<ast::type_t> parse_function_declaration_parameter_list(std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>> list_with_names) {
+    std::vector<ast::type_t> ret_type_list;
     for(const auto& param : list_with_names) {
         ret_type_list.push_back(std::move(param.first));
     }
@@ -630,7 +755,7 @@ std::variant<ast::function_declaration_t, ast::function_definition_t, ast::globa
             // use `has_return_statement` instead of `is_return_statement` because we don't need to emit a return statement if there already is one,
             //  even if there is unreachable code after the already existing return statement.
             if(statements.stmts.size() == 0 || !has_return_statement(statements)) {
-                statements.stmts.push_back(ast::return_statement_t { ast::expression_t{ ast::constant_t{DEFAULT_RETURN_VALUE}, ast::type_name_t{ast::type_category_t::INT, "int", sizeof(std::uint32_t), sizeof(std::uint32_t)} } } );
+                statements.stmts.push_back(ast::return_statement_t { ast::expression_t{ ast::constant_t{DEFAULT_RETURN_VALUE}, ast::type_t{ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t)} } } );
             }
         }
 

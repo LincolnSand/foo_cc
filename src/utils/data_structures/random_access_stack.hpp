@@ -146,7 +146,7 @@ public:
     }
 };
 class validation_variable_lookup_t {
-    random_access_stack_t<std::unordered_map<ast::var_name_t, ast::type_name_t>> variables;
+    random_access_stack_t<std::unordered_map<ast::var_name_t, ast::type_t>> variables;
 
 public:
     validation_variable_lookup_t() = default;
@@ -163,7 +163,7 @@ public:
         return false;
     }
 
-    ast::type_name_t find_in_accessible_scopes(const ast::var_name_t& variable_name) const {
+    ast::type_t find_in_accessible_scopes(const ast::var_name_t& variable_name) const {
         for(std::uint32_t i = 0u; i < variables.size(); ++i) {
             auto var_iter = variables.at(i).find(variable_name);
             if(var_iter != variables.at(i).end()) {
@@ -173,7 +173,7 @@ public:
         throw std::logic_error("Variable not found");
     }
 
-    void add_new_variable_in_current_scope(const ast::var_name_t& variable_name, const ast::type_name_t& variable_type) {
+    void add_new_variable_in_current_scope(const ast::var_name_t& variable_name, const ast::type_t& variable_type) {
         variables.peek().insert({variable_name, variable_type});
     }
 
