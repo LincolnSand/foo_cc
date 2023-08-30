@@ -2,10 +2,10 @@
 
 
 bool is_integral(const ast::type_t& lhs) {
-    return lhs.token_type == ast::type_category_t::INT || lhs.token_type == ast::type_category_t::UNSIGNED_INT;
+    return lhs.type_category == ast::type_category_t::INT || lhs.type_category == ast::type_category_t::UNSIGNED_INT;
 }
 bool is_arithmetic(const ast::type_t& lhs) {
-    switch(lhs.token_type) {
+    switch(lhs.type_category) {
         case ast::type_category_t::INT:
         case ast::type_category_t::UNSIGNED_INT:
         case ast::type_category_t::DOUBLE:
@@ -14,7 +14,7 @@ bool is_arithmetic(const ast::type_t& lhs) {
     return false;
 }
 bool is_convertible(const ast::type_t& lhs, const ast::type_t& rhs) {
-    if(lhs.token_type == rhs.token_type) {
+    if(lhs.type_category == rhs.type_category) {
         return true;
     }
 
@@ -46,7 +46,7 @@ void type_check_unary_expression(std::optional<ast::type_t>& type, ast::unary_ex
             break;
         case ast::unary_operator_token_t::LOGICAL_NOT: // TODO: add support for bools
             if(is_arithmetic(unary_exp.exp.type.value())) {
-                type = ast::type_t{ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t)};
+                type = make_primitive_type_t(ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t));
             } else {
                 throw std::runtime_error("Logical not is only supported for primitive types.");
             }
@@ -71,8 +71,8 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
             if(is_arithmetic(binary_exp.left.type.value()) && is_arithmetic(binary_exp.right.type.value())) {
                 if(compare_type_names(binary_exp.left.type.value(), binary_exp.right.type.value())) {
                     type = binary_exp.left.type.value();
-                } else if(binary_exp.left.type.value().token_type == ast::type_category_t::DOUBLE) { // TODO: refactor and remove code duplication by checking if left.type.token_type == right.type.token_type
-                    if(binary_exp.right.type.value().token_type == ast::type_category_t::DOUBLE) {
+                } else if(binary_exp.left.type.value().type_category == ast::type_category_t::DOUBLE) { // TODO: refactor and remove code duplication by checking if left.type.type_category == right.type.type_category
+                    if(binary_exp.right.type.value().type_category == ast::type_category_t::DOUBLE) {
                         if(binary_exp.left.type.value().size > binary_exp.right.type.value().size) {
                             type = binary_exp.left.type.value();
                             binary_exp.right = make_convert_t(std::move(binary_exp.right), type.value());
@@ -86,8 +86,8 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
                         type = binary_exp.left.type.value();
                         binary_exp.right = make_convert_t(std::move(binary_exp.right), type.value());
                     }
-                } else if(binary_exp.right.type.value().token_type == ast::type_category_t::DOUBLE) {
-                    if(binary_exp.left.type.value().token_type == ast::type_category_t::DOUBLE) {
+                } else if(binary_exp.right.type.value().type_category == ast::type_category_t::DOUBLE) {
+                    if(binary_exp.left.type.value().type_category == ast::type_category_t::DOUBLE) {
                         if(binary_exp.left.type.value().size > binary_exp.right.type.value().size) {
                             type = binary_exp.left.type.value();
                             binary_exp.right = make_convert_t(std::move(binary_exp.right), type.value());
@@ -101,8 +101,8 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
                         type = binary_exp.right.type.value();
                         binary_exp.left = make_convert_t(std::move(binary_exp.left), type.value());
                     }
-                } else if(binary_exp.left.type.value().token_type == ast::type_category_t::UNSIGNED_INT) {
-                    if(binary_exp.right.type.value().token_type == ast::type_category_t::UNSIGNED_INT) {
+                } else if(binary_exp.left.type.value().type_category == ast::type_category_t::UNSIGNED_INT) {
+                    if(binary_exp.right.type.value().type_category == ast::type_category_t::UNSIGNED_INT) {
                         if(binary_exp.left.type.value().size > binary_exp.right.type.value().size) {
                             type = binary_exp.left.type.value();
                             binary_exp.right = make_convert_t(std::move(binary_exp.right), type.value());
@@ -113,7 +113,7 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
                             type = binary_exp.left.type.value();
                         }
                     } else {
-                        assert(binary_exp.right.type.value().token_type == ast::type_category_t::INT);
+                        assert(binary_exp.right.type.value().type_category == ast::type_category_t::INT);
                         if(binary_exp.left.type.value().size >= binary_exp.right.type.value().size) {
                             type = binary_exp.left.type.value();
                             binary_exp.right = make_convert_t(std::move(binary_exp.right), type.value());
@@ -129,8 +129,8 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
                             binary_exp.left = make_convert_t(std::move(binary_exp.left), type.value());
                         }
                     }
-                } else if(binary_exp.right.type.value().token_type == ast::type_category_t::UNSIGNED_INT) {
-                    if(binary_exp.left.type.value().token_type == ast::type_category_t::UNSIGNED_INT) {
+                } else if(binary_exp.right.type.value().type_category == ast::type_category_t::UNSIGNED_INT) {
+                    if(binary_exp.left.type.value().type_category == ast::type_category_t::UNSIGNED_INT) {
                         if(binary_exp.left.type.value().size > binary_exp.right.type.value().size) {
                             type = binary_exp.left.type.value();
                             binary_exp.right = make_convert_t(std::move(binary_exp.right), type.value());
@@ -141,7 +141,7 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
                             type = binary_exp.left.type.value();
                         }
                     } else {
-                        assert(binary_exp.left.type.value().token_type == ast::type_category_t::INT);
+                        assert(binary_exp.left.type.value().type_category == ast::type_category_t::INT);
                         if(binary_exp.right.type.value().size >= binary_exp.left.type.value().size) {
                             type = binary_exp.right.type.value();
                             binary_exp.left = make_convert_t(std::move(binary_exp.left), type.value());
@@ -151,7 +151,7 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
                             binary_exp.right = make_convert_t(std::move(binary_exp.right), type.value());
                         }
                     }
-                } else if(binary_exp.left.type.value().token_type == ast::type_category_t::INT && binary_exp.right.type.value().token_type == ast::type_category_t::INT) {
+                } else if(binary_exp.left.type.value().type_category == ast::type_category_t::INT && binary_exp.right.type.value().type_category == ast::type_category_t::INT) {
                     if(binary_exp.left.type.value().size > binary_exp.right.type.value().size) {
                         type = binary_exp.left.type.value();
                         binary_exp.right = make_convert_t(std::move(binary_exp.right), type.value());
@@ -172,7 +172,7 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
 
         case ast::binary_operator_token_t::MODULO:
             if(is_integral(binary_exp.left.type.value()) && is_integral(binary_exp.right.type.value())) {
-                if((binary_exp.left.type.value().token_type == binary_exp.right.type.value().token_type)) {
+                if((binary_exp.left.type.value().type_category == binary_exp.right.type.value().type_category)) {
                     if(binary_exp.left.type.value().size > binary_exp.right.type.value().size) {
                         type = binary_exp.left.type.value();
                         binary_exp.right = make_convert_t(std::move(binary_exp.right), type.value());
@@ -182,8 +182,8 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
                     } else {
                         type = binary_exp.left.type.value();
                     }
-                } else if(binary_exp.left.type.value().token_type == ast::type_category_t::UNSIGNED_INT) {
-                    assert(binary_exp.right.type.value().token_type == ast::type_category_t::INT);
+                } else if(binary_exp.left.type.value().type_category == ast::type_category_t::UNSIGNED_INT) {
+                    assert(binary_exp.right.type.value().type_category == ast::type_category_t::INT);
                     if(binary_exp.left.type.value().size >= binary_exp.right.type.value().size) {
                         type = binary_exp.left.type.value();
                         binary_exp.right = make_convert_t(std::move(binary_exp.right), type.value());
@@ -192,8 +192,8 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
                         binary_exp.left = make_convert_t(std::move(binary_exp.left), type.value());
                     }
                 } else {
-                    assert(binary_exp.right.type.value().token_type == ast::type_category_t::UNSIGNED_INT);
-                    assert(binary_exp.left.type.value().token_type == ast::type_category_t::INT);
+                    assert(binary_exp.right.type.value().type_category == ast::type_category_t::UNSIGNED_INT);
+                    assert(binary_exp.left.type.value().type_category == ast::type_category_t::INT);
                     if(binary_exp.right.type.value().size >= binary_exp.left.type.value().size) {
                         type = binary_exp.right.type.value();
                         binary_exp.left = make_convert_t(std::move(binary_exp.left), type.value());
@@ -223,7 +223,7 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
             if(is_integral(binary_exp.left.type.value()) && is_integral(binary_exp.right.type.value())) {
                 if(compare_type_names(binary_exp.left.type.value(), binary_exp.right.type.value())) {
                     type = binary_exp.left.type.value();
-                } else if(binary_exp.left.type.value().token_type == binary_exp.right.type.value().token_type) {
+                } else if(binary_exp.left.type.value().type_category == binary_exp.right.type.value().type_category) {
                     if(binary_exp.left.type.value().size > binary_exp.right.type.value().size) {
                         type = binary_exp.left.type.value();
                         binary_exp.right = make_convert_t(std::move(binary_exp.right), type.value());
@@ -233,8 +233,8 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
                     } else {
                         type = binary_exp.left.type.value();
                     }
-                } else if(binary_exp.left.type.value().token_type == ast::type_category_t::UNSIGNED_INT) {
-                    assert(binary_exp.right.type.value().token_type == ast::type_category_t::INT);
+                } else if(binary_exp.left.type.value().type_category == ast::type_category_t::UNSIGNED_INT) {
+                    assert(binary_exp.right.type.value().type_category == ast::type_category_t::INT);
                     if(binary_exp.left.type.value().size >= binary_exp.right.type.value().size) {
                         type = binary_exp.left.type.value();
                         binary_exp.right = make_convert_t(std::move(binary_exp.right), type.value());
@@ -243,8 +243,8 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
                         binary_exp.left = make_convert_t(std::move(binary_exp.left), type.value());
                     }
                 } else {
-                    assert(binary_exp.right.type.value().token_type == ast::type_category_t::UNSIGNED_INT);
-                    assert(binary_exp.left.type.value().token_type == ast::type_category_t::INT);
+                    assert(binary_exp.right.type.value().type_category == ast::type_category_t::UNSIGNED_INT);
+                    assert(binary_exp.left.type.value().type_category == ast::type_category_t::INT);
                     if(binary_exp.right.type.value().size >= binary_exp.left.type.value().size) {
                         type = binary_exp.right.type.value();
                         binary_exp.left = make_convert_t(std::move(binary_exp.left), type.value());
@@ -267,11 +267,11 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
         case ast::binary_operator_token_t::NOT_EQUAL:
             if(is_arithmetic(binary_exp.left.type.value()) && is_arithmetic(binary_exp.right.type.value())) {
                 // TODO: support booleans
-                type = ast::type_t{ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t)};
+                type = make_primitive_type_t(ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t));
 
                 if(!compare_type_names(binary_exp.left.type.value(), binary_exp.right.type.value())) {
-                    if(binary_exp.left.type.value().token_type == ast::type_category_t::DOUBLE) {
-                        if(binary_exp.right.type.value().token_type == ast::type_category_t::DOUBLE) {
+                    if(binary_exp.left.type.value().type_category == ast::type_category_t::DOUBLE) {
+                        if(binary_exp.right.type.value().type_category == ast::type_category_t::DOUBLE) {
                             if(binary_exp.left.type.value().size > binary_exp.right.type.value().size) {
                                 binary_exp.right = make_convert_t(std::move(binary_exp.right), binary_exp.left.type.value());
                             } else if(binary_exp.left.type.value().size != binary_exp.right.type.value().size) {
@@ -280,8 +280,8 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
                         } else {
                             binary_exp.right = make_convert_t(std::move(binary_exp.right), binary_exp.left.type.value());
                         }
-                    } else if(binary_exp.right.type.value().token_type == ast::type_category_t::DOUBLE) {
-                        if(binary_exp.left.type.value().token_type == ast::type_category_t::DOUBLE) {
+                    } else if(binary_exp.right.type.value().type_category == ast::type_category_t::DOUBLE) {
+                        if(binary_exp.left.type.value().type_category == ast::type_category_t::DOUBLE) {
                             if(binary_exp.left.type.value().size > binary_exp.right.type.value().size) {
                                 binary_exp.right = make_convert_t(std::move(binary_exp.right), binary_exp.left.type.value());
                             } else if(binary_exp.left.type.value().size != binary_exp.right.type.value().size) {
@@ -290,7 +290,7 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
                         } else {
                             binary_exp.left = make_convert_t(std::move(binary_exp.left), binary_exp.right.type.value());
                         }
-                    } else if(binary_exp.left.type.value().token_type == binary_exp.right.type.value().token_type) {
+                    } else if(binary_exp.left.type.value().type_category == binary_exp.right.type.value().type_category) {
                         if(binary_exp.left.type.value().size > binary_exp.right.type.value().size) {
                             binary_exp.right = make_convert_t(std::move(binary_exp.right), binary_exp.left.type.value());
                         } else if(binary_exp.left.type.value().size != binary_exp.right.type.value().size) {
@@ -299,16 +299,16 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
                             // same size and same category of type, but technically different, arbitrarily convert to one of them so the types match
                             binary_exp.left = make_convert_t(std::move(binary_exp.left), binary_exp.right.type.value());
                         }
-                    } else if(binary_exp.left.type.value().token_type == ast::type_category_t::UNSIGNED_INT) {
-                        assert(binary_exp.right.type.value().token_type == ast::type_category_t::INT);
+                    } else if(binary_exp.left.type.value().type_category == ast::type_category_t::UNSIGNED_INT) {
+                        assert(binary_exp.right.type.value().type_category == ast::type_category_t::INT);
                         if(binary_exp.left.type.value().size >= binary_exp.right.type.value().size) {
                             binary_exp.right = make_convert_t(std::move(binary_exp.right), binary_exp.left.type.value());
                         } else {
                             binary_exp.left = make_convert_t(std::move(binary_exp.left), binary_exp.right.type.value());
                         }
                     } else {
-                        assert(binary_exp.right.type.value().token_type == ast::type_category_t::UNSIGNED_INT);
-                        assert(binary_exp.left.type.value().token_type == ast::type_category_t::INT);
+                        assert(binary_exp.right.type.value().type_category == ast::type_category_t::UNSIGNED_INT);
+                        assert(binary_exp.left.type.value().type_category == ast::type_category_t::INT);
                         if(binary_exp.right.type.value().size >= binary_exp.left.type.value().size) {
                             binary_exp.left = make_convert_t(std::move(binary_exp.left), binary_exp.right.type.value());
                         } else {
@@ -325,7 +325,7 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
         case ast::binary_operator_token_t::LOGICAL_AND:
         case ast::binary_operator_token_t::LOGICAL_OR:
             if(is_arithmetic(binary_exp.left.type.value()) && is_arithmetic(binary_exp.right.type.value())) {
-                type = ast::type_t{ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t)};
+                type = make_primitive_type_t(ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t));
 
                 if(binary_exp.left.type.value().type_name != "int") {
                     binary_exp.left = make_convert_t(std::move(binary_exp.left), type.value());
@@ -363,17 +363,17 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
     }
 }
 void type_check_ternary_expression(std::optional<ast::type_t>& type, ast::ternary_expression_t& ternary_exp) {
-    if(!is_convertible(ternary_exp.condition.type.value(), ast::type_t{ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t)})) {
+    if(!is_convertible(ternary_exp.condition.type.value(), make_primitive_type_t(ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t)))) {
         throw std::runtime_error("Condition of ternary expression is of type: [" + ternary_exp.condition.type.value().type_name + "], which is not truthy.");
     }
-    if(!compare_type_names(ternary_exp.condition.type.value(), ast::type_t{ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t)})) {
-        ternary_exp.condition = make_convert_t(std::move(ternary_exp.condition), ast::type_t{ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t)});
+    if(!compare_type_names(ternary_exp.condition.type.value(), make_primitive_type_t(ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t)))) {
+        ternary_exp.condition = make_convert_t(std::move(ternary_exp.condition), make_primitive_type_t(ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t)));
     }
 
     if(is_convertible(ternary_exp.if_true.type.value(), ternary_exp.if_true.type.value())) {
         if(compare_type_names(ternary_exp.if_true.type.value(), ternary_exp.if_true.type.value())) {
             type = ternary_exp.if_true.type.value();
-        } else if(ternary_exp.if_true.type.value().token_type == ternary_exp.if_false.type.value().token_type) {
+        } else if(ternary_exp.if_true.type.value().type_category == ternary_exp.if_false.type.value().type_category) {
             if(ternary_exp.if_true.type.value().size >= ternary_exp.if_false.type.value().size) {
                 type = ternary_exp.if_true.type.value();
                 ternary_exp.if_false = make_convert_t(std::move(ternary_exp.if_false), type.value());
@@ -381,14 +381,14 @@ void type_check_ternary_expression(std::optional<ast::type_t>& type, ast::ternar
                 type = ternary_exp.if_false.type.value();
                 ternary_exp.if_true = make_convert_t(std::move(ternary_exp.if_true), type.value());
             }
-        } else if(ternary_exp.if_true.type.value().token_type == ast::type_category_t::DOUBLE) {
+        } else if(ternary_exp.if_true.type.value().type_category == ast::type_category_t::DOUBLE) {
             type = ternary_exp.if_true.type.value();
             ternary_exp.if_false = make_convert_t(std::move(ternary_exp.if_false), type.value());
-        } else if(ternary_exp.if_false.type.value().token_type == ast::type_category_t::DOUBLE) {
+        } else if(ternary_exp.if_false.type.value().type_category == ast::type_category_t::DOUBLE) {
             type = ternary_exp.if_false.type.value();
             ternary_exp.if_true = make_convert_t(std::move(ternary_exp.if_true), type.value());
-        } else if(ternary_exp.if_true.type.value().token_type == ast::type_category_t::UNSIGNED_INT) {
-            assert(ternary_exp.if_false.type.value().token_type == ast::type_category_t::INT);
+        } else if(ternary_exp.if_true.type.value().type_category == ast::type_category_t::UNSIGNED_INT) {
+            assert(ternary_exp.if_false.type.value().type_category == ast::type_category_t::INT);
             if(ternary_exp.if_true.type.value().size >= ternary_exp.if_false.type.value().size) {
                 type = ternary_exp.if_true.type.value();
                 ternary_exp.if_false = make_convert_t(std::move(ternary_exp.if_false), type.value());
@@ -396,8 +396,8 @@ void type_check_ternary_expression(std::optional<ast::type_t>& type, ast::ternar
                 type = ternary_exp.if_false.type.value();
                 ternary_exp.if_true = make_convert_t(std::move(ternary_exp.if_true), type.value());
             }
-        } else if(ternary_exp.if_false.type.value().token_type == ast::type_category_t::UNSIGNED_INT) {
-            assert(ternary_exp.if_true.type.value().token_type == ast::type_category_t::INT);
+        } else if(ternary_exp.if_false.type.value().type_category == ast::type_category_t::UNSIGNED_INT) {
+            assert(ternary_exp.if_true.type.value().type_category == ast::type_category_t::INT);
             if(ternary_exp.if_false.type.value().size >= ternary_exp.if_true.type.value().size) {
                 type = ternary_exp.if_false.type.value();
                 ternary_exp.if_true = make_convert_t(std::move(ternary_exp.if_true), type.value());

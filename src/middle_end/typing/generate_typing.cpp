@@ -1,8 +1,8 @@
-#include <middle_end/validation/validate_ast.hpp>
+#include <frontend/parsing/parser.hpp>
 
 
 bool compare_type_names(const ast::type_t& lhs, const ast::type_t& rhs) {
-    if(lhs.token_type == rhs.token_type) {
+    if(lhs.type_category == rhs.type_category) {
         if(lhs.type_name == rhs.type_name) {
             return true;
         }

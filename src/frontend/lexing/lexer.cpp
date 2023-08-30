@@ -116,9 +116,13 @@ token_type_t handle_keywords(lexer_t& lexer) {
                         return match_keyword(lexer, 2, "ort", token_type_t::SHORT_KEYWORD);
                     case 'i':
                         return match_keyword(lexer, 2, "gned", token_type_t::SIGNED_KEYWORD);
+                    case 't':
+                        return match_keyword(lexer, 2, "ruct", token_type_t::STRUCT_KEYWORD);
                 }
             }
             break;
+        case 't':
+            return match_keyword(lexer, 1, "ypedef", token_type_t::TYPEDEF_KEYWORD);
         case 'u':
             return match_keyword(lexer, 1, "nsigned", token_type_t::UNSIGNED_KEYWORD);
     }
@@ -336,6 +340,8 @@ token_t scan_token(lexer_t& lexer) {
 // TODO: double check that `merge_tokens` is correct and test it thoroughly
 std::vector<token_t> merge_tokens(const std::vector<token_t>& tokens) {
     std::vector<token_t> result;
+    result.reserve(tokens.size());
+
     std::uint32_t i = 0;
     for(;;) {
         if(i >= tokens.size()) {

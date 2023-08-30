@@ -5,7 +5,6 @@
 #include <frontend/lexing/lexer.hpp>
 #include <frontend/parsing/parser.hpp>
 #include <frontend/ast/ast_printer.hpp>
-#include <middle_end/validation/validate_ast.hpp>
 #include <middle_end/typing/type_checker.hpp>
 //#include <backend/x86_64/traverse_ast.hpp>
 
