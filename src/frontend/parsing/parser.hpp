@@ -135,4 +135,4 @@ ast::declaration_t parse_declaration(parser_t& parser);
 ast::compound_statement_t parse_compound_statement(parser_t& parser);
 std::variant<ast::function_declaration_t, ast::function_definition_t, ast::declaration_t> parse_top_level_declaration(parser_t& parser);
 
-ast::program_t parse(parser_t& parser);
+ast::validated_program_t parse(parser_t& parser);

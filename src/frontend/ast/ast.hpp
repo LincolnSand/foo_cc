@@ -147,14 +147,6 @@ struct function_definition_t {
 
 using global_variable_declaration_t = declaration_t;
 using type_table_t = std::array<std::unordered_map<type_name_t, type_t>, NUMBER_OF_TYPE_CATEGORIES>;
-struct program_t {
-    // Maintain separate symbol tables for type category so we can have both a `struct` and `typedef` with the same name without having to append "struct " to the key in the case of the former.
-    // It also just generally will make your life easier for disambiguating identifiers later.
-    type_table_t type_table;
-
-    // symbol validation and all other non-syntax checking (e.g. number of params, multiple definition, etc.) will not be checked during parsing and are caught and validated during a later compiler pass.
-    std::vector<std::variant<function_declaration_t, function_definition_t, global_variable_declaration_t>> top_level_declarations;
-};
 
 struct validated_global_variable_definition_t {
     type_t type_name;
@@ -180,12 +172,13 @@ inline ast::type_t make_primitive_type_t(ast::type_category_t type_category, ast
     return ast::type_t{type_category, std::move(type_name), std::nullopt, std::nullopt, size, alignment, {}, {}};
 }
 inline ast::type_t make_typedef_type_t(const ast::type_table_t& type_table, ast::type_name_t type_name, ast::type_category_t aliased_type_category, ast::type_name_t aliased_type) {
-    auto aliased_type_iter = type_table.at(static_cast<std::uint32_t>(aliased_type_category)).find(aliased_type);
-    if(aliased_type_iter == std::end(type_table.at(static_cast<std::uint32_t>(aliased_type_category)))) {
-        throw std::logic_error("Type being aliased does not exist.");
+    if(aliased_type_category != ast::type_category_t::STRUCT) {
+        auto aliased_type_iter = type_table.at(static_cast<std::uint32_t>(aliased_type_category)).find(aliased_type);
+        if(aliased_type_iter == std::end(type_table.at(static_cast<std::uint32_t>(aliased_type_category)))) {
+            throw std::logic_error("Type being aliased does not exist.");
+        }
     }
-    // Fyi, if you are type aliasing a forward declaration (or a type alias of a forward declaration) that is later defined, the size, alignment, and fields members will be updated on the first query after it has been defined.
-    return ast::type_t{ast::type_category_t::TYPEDEF, std::move(type_name), aliased_type_category, aliased_type, aliased_type_iter->second.size, aliased_type_iter->second.alignment, aliased_type_iter->second.field_offsets, aliased_type_iter->second.fields};
+    return ast::type_t{ast::type_category_t::TYPEDEF, std::move(type_name), aliased_type_category, aliased_type, std::nullopt, std::nullopt, {}, {}};
 }
 inline ast::type_t make_struct_forward_decl_type_t(ast::type_name_t type_name) {
     return ast::type_t{ast::type_category_t::STRUCT, std::move(type_name), std::nullopt, std::nullopt, std::nullopt, std::nullopt, {}, {}};

@@ -8,23 +8,28 @@ void validate_type_name(const ast::type_t& expected, const ast::type_t& actual, 
         }
     }
 }
-void validate_variable(const validation_t& validation, const ast::var_name_t& var_name) {
-    if(!validation.variable_lookup.contains_in_accessible_scopes(var_name) && !utils::contains(validation.global_variable_declarations, var_name) && !utils::contains(validation.global_variable_definitions, var_name)) {
-        throw std::runtime_error("Variable [" + var_name + "] is not declared in currently accessible scopes.");
+
+// TODO: maybe pull out and make globally accessible
+static bool is_keyword_a_type(token_type_t token_type) {
+    switch(token_type) {
+        case token_type_t::CHAR_KEYWORD:
+        case token_type_t::SIGNED_CHAR_KEYWORD:
+        case token_type_t::UNSIGNED_CHAR_KEYWORD:
+        case token_type_t::SHORT_KEYWORD:
+        case token_type_t::UNSIGNED_SHORT_KEYWORD:
+        case token_type_t::INT_KEYWORD:
+        case token_type_t::UNSIGNED_INT_KEYWORD:
+        case token_type_t::LONG_KEYWORD:
+        case token_type_t::UNSIGNED_LONG_KEYWORD:
+        case token_type_t::LONG_LONG_KEYWORD:
+        case token_type_t::UNSIGNED_LONG_LONG_KEYWORD:
+        case token_type_t::FLOAT_KEYWORD:
+        case token_type_t::DOUBLE_KEYWORD:
+        case token_type_t::LONG_DOUBLE_KEYWORD:
+            return true;
     }
+    return false;
 }
-void validate_variable_declaration(validation_t& validation, ast::declaration_t& declaration) {
-    if(validation.variable_lookup.contains_in_lowest_scope(declaration.var_name)) {
-        throw std::runtime_error("Variable " + declaration.var_name + " already declared in current scope.");
-    }
-
-    validation.variable_lookup.add_new_variable_in_current_scope(declaration.var_name, declaration.type_name);
-
-    if(declaration.value.has_value()) {
-        validate_expression(validation, declaration.value.value());
-    }
-}
-
 static bool is_return_statement(const std::variant<ast::statement_t, ast::declaration_t>& stmt) {
     return std::visit(overloaded{
         [](const ast::statement_t& stmt) {
@@ -158,14 +163,6 @@ bool has_return_statement(const ast::compound_statement_t& compound_stmt) {
     return false;
 }
 
-ast::var_name_t parse_var_name(parser_t& parser) {
-    auto identifier_token = parser.advance_token();
-    if(!is_var_name(identifier_token)) {
-        throw std::runtime_error("Invalid identifier: [" + std::to_string(static_cast<std::uint32_t>(parser.peek_token().token_type)) + std::string("]"));
-    }
-
-    return ast::var_name_t { identifier_token.token_text };
-}
 template<typename T>
 ast::constant_t parse_constant(parser_t& parser, const std::size_t suffix_size = 0u) {
     auto next = parser.advance_token();
@@ -208,12 +205,12 @@ ast::expression_t parse_long_double_constant(parser_t& parser) {
     return ast::expression_t { parse_constant<long double>(parser, 1), make_primitive_type_t(ast::type_category_t::DOUBLE, "long double", sizeof(long double), alignof(long double)) };
 }
 std::shared_ptr<ast::grouping_t> parse_grouping(parser_t& parser) {
-    parser.advance_token();
-    auto exp = parse_expression(parser, 0u);
+    parser.expect_token(token_type_t::LEFT_PAREN, "Expected '(' in grouping expression.");
+    auto exp = parse_and_validate_expression(parser, 0u);
     if(parser.peek_token().token_type != token_type_t::RIGHT_PAREN) {
         throw std::runtime_error("expected `)`");
     }
-    parser.advance_token();
+    parser.expect_token(token_type_t::RIGHT_PAREN, "Expected ')' in grouping expression.");
     return make_grouping(std::move(exp));
 }
 
@@ -261,11 +258,65 @@ ast::precedence_t prefix_binding_power(const ast::unary_operator_token_t token) 
 std::shared_ptr<ast::unary_expression_t> make_prefix_op(const ast::unary_operator_token_t op, ast::expression_t&& rhs) {
     return std::make_shared<ast::unary_expression_t>(ast::unary_expression_t{ast::unary_operator_fixity_t::PREFIX, op, std::move(rhs)});
 }
+ast::var_name_t parse_and_validate_variable(parser_t& parser, const token_t name_token) {
+    auto name = ast::var_name_t { name_token.token_text };
+    if(!parser.symbol_info.variable_lookup.contains_in_accessible_scopes(name) && !utils::contains(parser.symbol_info.global_variable_declarations, name) && !utils::contains(parser.symbol_info.global_variable_definitions, name)) {
+        throw std::runtime_error("Variable [" + name + "] is not declared in currently accessible scopes.");
+    }
+    return name;
+}
+std::shared_ptr<ast::function_call_t> parse_and_validate_function_call(parser_t& parser, const token_t name_token) {
+    parser.expect_token(token_type_t::LEFT_PAREN, "Expected `(` in function call.");
+
+    std::vector<ast::expression_t> args;
+    while(parser.peek_token().token_type != token_type_t::RIGHT_PAREN) {
+        args.push_back(parse_and_validate_expression(parser, 3)); // accept all expressions as arguments except for comma operator, so pass precedence of assignment operator lhs
+
+        if(parser.peek_token().token_type != token_type_t::COMMA) {
+            break;
+        }
+        parser.advance_token();
+    }
+
+    parser.expect_token(token_type_t::RIGHT_PAREN, "Expected `)` in function call.");
+
+    auto function_call = ast::function_call_t{ast::func_name_t(name_token.token_text), std::move(args)};
+
+    if(utils::contains(parser.symbol_info.function_declarations_lookup, function_call.function_name)) {
+        const auto declaration = parser.symbol_info.function_declarations_lookup.at(function_call.function_name);
+        if(declaration.params.size() != function_call.params.size()) {
+            throw std::runtime_error("Function [" + function_call.function_name + "] param count mismatch.");
+        }
+        // TODO: type check parameters to function call
+    } else if(utils::contains(parser.symbol_info.function_definitions_lookup, function_call.function_name)) {
+        const auto definition = parser.symbol_info.function_definitions_lookup.at(function_call.function_name);
+        if(definition.params.size() != function_call.params.size()) {
+            throw std::runtime_error("Function [" + function_call.function_name + "] param count mismatch.");
+        }
+        // TODO: type check parameters to function call
+    } else {
+        throw std::runtime_error("Function [" + function_call.function_name + "] not declared or defined.");
+    }
+
+    return std::make_shared<ast::function_call_t>(std::move(function_call));
+}
+std::variant<ast::var_name_t, std::shared_ptr<ast::function_call_t>> parse_and_validate_variable_or_function_call(parser_t& parser) {
+    auto name_token = parser.advance_token();
+    if(name_token.token_type != token_type_t::IDENTIFIER) {
+        throw std::runtime_error("Invalid identifier: [" + std::to_string(static_cast<std::uint32_t>(name_token.token_type)) + std::string("]"));
+    }
+
+    if(parser.peek_token().token_type == token_type_t::LEFT_PAREN) {
+        return parse_and_validate_function_call(parser, name_token);
+    } else {
+        return parse_and_validate_variable(parser, name_token);
+    }
+}
 ast::expression_t parse_prefix_expression(parser_t& parser) {
     std::cout << "Non-Error Prefix Expression: " << static_cast<std::uint32_t>(parser.peek_token().token_type) << ": " << parser.peek_token().token_text << std::endl;
     switch(parser.peek_token().token_type) {
         case token_type_t::IDENTIFIER:
-            return {parse_var_name(parser), std::nullopt};
+            return {parse_and_validate_variable_or_function_call(parser), std::nullopt};
         case token_type_t::CHAR_CONSTANT:
             return parse_char_constant(parser);
         case token_type_t::INT_CONSTANT:
@@ -292,7 +343,7 @@ ast::expression_t parse_prefix_expression(parser_t& parser) {
             if(is_prefix_op(parser.peek_token())) {
                 auto op = parse_prefix_op(parser.advance_token());
                 auto r_bp = prefix_binding_power(op);
-                auto rhs = parse_expression(parser, r_bp);
+                auto rhs = parse_and_validate_expression(parser, r_bp);
                 return {make_prefix_op(op, std::move(rhs)), std::nullopt};
             }
             std::cout << static_cast<std::uint32_t>(parser.peek_token().token_type) << ": " << parser.peek_token().token_text << std::endl;
@@ -493,27 +544,12 @@ std::string get_identifier_from_expression(const ast::expression_t& expr) {
         }
     }, expr.expr);
 }
-ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t precedence) {
+ast::expression_t parse_and_validate_expression(parser_t& parser, const ast::precedence_t precedence) {
     auto lhs = parse_prefix_expression(parser);
 
     for(;;) {
         if(parser.peek_token().token_type == token_type_t::EOF_TOK) {
             break;
-        }
-
-        if(parser.peek_token().token_type == token_type_t::LEFT_PAREN) {
-            parser.advance_token();
-            std::vector<ast::expression_t> args;
-            while(parser.peek_token().token_type != token_type_t::RIGHT_PAREN) {
-                args.push_back(parse_expression(parser, 3)); // accept all expressions as arguments except for comma operator, so pass precedence of assignment operator lhs
-                if(parser.peek_token().token_type != token_type_t::COMMA) {
-                    break;
-                }
-                parser.advance_token();
-            }
-            parser.expect_token(token_type_t::RIGHT_PAREN, "Expected `)` in function call.");
-            lhs = {std::make_shared<ast::function_call_t>(ast::function_call_t{get_identifier_from_expression(lhs), std::move(args)}), std::nullopt};
-            continue;
         }
 
         if(is_postfix_op(parser.peek_token())) {
@@ -534,7 +570,7 @@ ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t pre
                 break;
             }
             parser.advance_token();
-            auto rhs = parse_expression(parser, r_bp);
+            auto rhs = parse_and_validate_expression(parser, r_bp);
             lhs = {make_infix_op(op, std::move(lhs), std::move(rhs)), std::nullopt};
             continue;
         }
@@ -542,7 +578,7 @@ ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t pre
         if(is_compound_assignment_op(parser.peek_token())) {
             auto op = get_op_from_compound_assignment_op(parser.peek_token());
             parser.advance_token();
-            lhs = {make_infix_op(ast::binary_operator_token_t::ASSIGNMENT, {validate_lvalue_expression_exp(lhs), std::nullopt}, {make_infix_op(op, {validate_lvalue_expression_exp(lhs), std::nullopt}, parse_expression(parser, precedence)), std::nullopt}), std::nullopt};
+            lhs = {make_infix_op(ast::binary_operator_token_t::ASSIGNMENT, {validate_lvalue_expression_exp(lhs), std::nullopt}, {make_infix_op(op, {validate_lvalue_expression_exp(lhs), std::nullopt}, parse_and_validate_expression(parser, precedence)), std::nullopt}), std::nullopt};
             continue;
         }
 
@@ -553,9 +589,9 @@ ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t pre
                 break;
             }
             parser.advance_token();
-            auto if_true = parse_expression(parser, precedence);
+            auto if_true = parse_and_validate_expression(parser, precedence);
             parser.expect_token(token_type_t::COLON, "Expected `:` in ternary expression.");
-            auto if_false = parse_expression(parser, 28); // 28 is the highest level of precedence, we use this so it greedily parses `a < b ? a = 1 : a = 2` as `(a < b ? a = 1 : a) = 2` instead of `(a < b ? a = 1 : a = 2)`.
+            auto if_false = parse_and_validate_expression(parser, 28); // 28 is the highest level of precedence, we use this so it greedily parses `a < b ? a = 1 : a = 2` as `(a < b ? a = 1 : a) = 2` instead of `(a < b ? a = 1 : a = 2)`.
             lhs = {std::make_shared<ast::ternary_expression_t>(ast::ternary_expression_t{std::move(lhs), std::move(if_true), std::move(if_false)}), std::nullopt};
             continue;
         }
@@ -565,45 +601,45 @@ ast::expression_t parse_expression(parser_t& parser, const ast::precedence_t pre
 
     return lhs;
 }
-ast::expression_t parse_expression(parser_t& parser) {
-    return parse_expression(parser, 0u);
+ast::expression_t parse_and_validate_expression(parser_t& parser) {
+    return parse_and_validate_expression(parser, 0u);
 }
 
 ast::return_statement_t parse_return_statement(parser_t& parser) {
     parser.expect_token(token_type_t::RETURN_KEYWORD, "Expected `return` keyword in statement.");
 
-    auto expression = parse_expression(parser);
+    auto expression = parse_and_validate_expression(parser);
 
     parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in statement.");
 
     return ast::return_statement_t{std::move(expression)};
 }
-ast::expression_statement_t parse_expression_statement(parser_t& parser) {
+ast::expression_statement_t parse_and_validate_expression_statement(parser_t& parser) {
     if(parser.peek_token().token_type == token_type_t::SEMICOLON) {
         parser.advance_token();
         return ast::expression_statement_t{std::nullopt}; // null statement, i.e. `;`
     }
 
-    auto expression = parse_expression(parser);
+    auto expression = parse_and_validate_expression(parser);
 
     parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in statement.");
 
     return ast::expression_statement_t{std::move(expression)};
 }
-ast::if_statement_t parse_if_statement(parser_t& parser) {
+ast::if_statement_t parse_and_validate_if_statement(parser_t& parser) {
     parser.expect_token(token_type_t::IF_KEYWORD, "Expected `if` keyword in statement.");
 
     parser.expect_token(token_type_t::LEFT_PAREN, "Expected `(` in statement.");
 
-    auto if_exp = parse_expression(parser);
+    auto if_exp = parse_and_validate_expression(parser);
 
     parser.expect_token(token_type_t::RIGHT_PAREN, "Expected `)` in statement.");
 
     ast::statement_t if_body;
     if(parser.peek_token().token_type == token_type_t::LEFT_CURLY) {
-        if_body = std::make_shared<ast::compound_statement_t>(parse_compound_statement(parser));
+        if_body = std::make_shared<ast::compound_statement_t>(parse_and_validate_compound_statement(parser));
     } else {
-        if_body = parse_statement(parser);
+        if_body = parse_and_validate_statement(parser);
     }
 
     if(parser.peek_token().token_type != token_type_t::ELSE_KEYWORD) {
@@ -613,49 +649,29 @@ ast::if_statement_t parse_if_statement(parser_t& parser) {
     parser.advance_token(); // consume `else` keyword
 
     if(parser.peek_token().token_type == token_type_t::LEFT_CURLY) {
-        return ast::if_statement_t{std::move(if_exp), std::move(if_body), std::make_shared<ast::compound_statement_t>(parse_compound_statement(parser))};
+        return ast::if_statement_t{std::move(if_exp), std::move(if_body), std::make_shared<ast::compound_statement_t>(parse_and_validate_compound_statement(parser))};
     } else {
-        return ast::if_statement_t{std::move(if_exp), std::move(if_body), parse_statement(parser)};
+        return ast::if_statement_t{std::move(if_exp), std::move(if_body), parse_and_validate_statement(parser)};
     }
 }
-ast::statement_t parse_statement(parser_t& parser) {
+ast::statement_t parse_and_validate_statement(parser_t& parser) {
     if(parser.is_eof()) {
         throw std::runtime_error("Unexpected end of file.");
     }
 
-    if(parser.peek_token().token_type == token_type_t::RETURN_KEYWORD) {
-        return parse_return_statement(parser);
-    } else if(parser.peek_token().token_type == token_type_t::IF_KEYWORD) {
-        return std::make_shared<ast::if_statement_t>(parse_if_statement(parser));
-    } else if(parser.peek_token().token_type == token_type_t::LEFT_CURLY) {
-        return std::make_shared<ast::compound_statement_t>(parse_compound_statement(parser));
+    const auto next_token_type = parser.peek_token().token_type;
+    if(next_token_type == token_type_t::RETURN_KEYWORD) {
+        return parse_and_validate_return_statement(parser);
+    } else if(next_token_type == token_type_t::IF_KEYWORD) {
+        return std::make_shared<ast::if_statement_t>(parse_and_validate_if_statement(parser));
+    } else if(next_token_type == token_type_t::LEFT_CURLY) {
+        return std::make_shared<ast::compound_statement_t>(parse_and_validate_compound_statement(parser));
     }
-    return parse_expression_statement(parser);
+    return parse_and_validate_expression_statement(parser);
 }
-// TODO: maybe pull out and make globally accessible
-static bool is_keyword_a_type(token_type_t token_type) {
-    switch(token_type) {
-        case token_type_t::CHAR_KEYWORD:
-        case token_type_t::SIGNED_CHAR_KEYWORD:
-        case token_type_t::UNSIGNED_CHAR_KEYWORD:
-        case token_type_t::SHORT_KEYWORD:
-        case token_type_t::UNSIGNED_SHORT_KEYWORD:
-        case token_type_t::INT_KEYWORD:
-        case token_type_t::UNSIGNED_INT_KEYWORD:
-        case token_type_t::LONG_KEYWORD:
-        case token_type_t::UNSIGNED_LONG_KEYWORD:
-        case token_type_t::LONG_LONG_KEYWORD:
-        case token_type_t::UNSIGNED_LONG_LONG_KEYWORD:
-        case token_type_t::FLOAT_KEYWORD:
-        case token_type_t::DOUBLE_KEYWORD:
-        case token_type_t::LONG_DOUBLE_KEYWORD:
-            return true;
-    }
-    return false;
-}
-ast::declaration_t parse_declaration(parser_t& parser) {
+ast::declaration_t parse_and_validate_declaration(parser_t& parser) {
     const auto type_token = parser.advance_token();
-    if(!is_keyword_a_type(type_token.token_type)) {
+    if(!is_a_type(type_token)) {
         std::cout << static_cast<std::uint32_t>(type_token.token_type) << ": " << type_token.token_text << std::endl;
         throw std::runtime_error("Expected type name in declaration.");
     }
@@ -665,23 +681,39 @@ ast::declaration_t parse_declaration(parser_t& parser) {
         throw std::runtime_error("Expected identifier.");
     }
 
+    auto var_name = ast::var_name_t(identifier_token.token_text);
+
+    if(parser.symbol_info.variable_lookup.contains_in_lowest_scope(var_name)) {
+        throw std::runtime_error("Variable " + var_name + " already declared in current scope.");
+    }
+
+    auto type = create_type_name_from_token(type_token);
+
     if(parser.peek_token().token_type != token_type_t::EQUALS) {
-        auto ret = ast::declaration_t{create_type_name_from_token(type_token), ast::var_name_t(identifier_token.token_text), std::nullopt};
+        auto ret = ast::declaration_t{type, var_name, std::nullopt};
 
         parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in statement.");
+
+        parser.symbol_info.variable_lookup.add_new_variable_in_current_scope(var_name, type);
 
         return ret;
     }
 
     parser.advance_token(); // consume `=` token
 
-    auto ret = ast::declaration_t{create_type_name_from_token(type_token), ast::var_name_t(identifier_token.token_text), parse_expression(parser)};
+    auto ret = ast::declaration_t{type, var_name, parse_and_validate_expression(parser)};
 
     parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in statement.");
 
+    parser.symbol_info.variable_lookup.add_new_variable_in_current_scope(var_name, type);
+
     return ret;
 }
-ast::compound_statement_t parse_compound_statement(parser_t& parser) {
+ast::compound_statement_t parse_and_validate_compound_statement(parser_t& parser, bool is_function_block) {
+    if(!is_function_block) {
+        parser.symbol_info.variable_lookup.create_new_scope();
+    }
+
     parser.expect_token(token_type_t::LEFT_CURLY, "Expected `{` in statement.");
 
     ast::compound_statement_t ret{};
@@ -691,13 +723,17 @@ ast::compound_statement_t parse_compound_statement(parser_t& parser) {
             throw std::runtime_error("Unexpected end of file. Unterminated compound statement.");
         }
 
-        if(is_keyword_a_type(parser.peek_token().token_type)) {
-            ret.stmts.push_back(parse_declaration(parser));
+        if(is_a_type(parser.peek_token())) {
+            ret.stmts.push_back(parse_and_validate_declaration(parser));
         } else {
-            ret.stmts.push_back(parse_statement(parser));
+            ret.stmts.push_back(parse_and_validate_statement(parser));
         }
     }
     parser.advance_token(); // consume `}` token
+
+    if(!is_function_block) {
+        parser.symbol_info.variable_lookup.destroy_current_scope();
+    }
 
     return ret;
 }
@@ -750,97 +786,18 @@ static std::vector<ast::type_t> parse_function_declaration_parameter_list(std::v
     }
     return ret_type_list;
 }
-ast::type_t parse_type_declaration(parser_t& parser) {
-    // TODO: IMPLEMENT ASAP!!!
-}
-std::variant<ast::function_declaration_t, ast::function_definition_t, ast::global_variable_declaration_t> parse_top_level_declaration(parser_t& parser) {
-    const auto type_token = parser.advance_token();
-    if(type_token.token_type != token_type_t::INT_KEYWORD) {
-        throw std::runtime_error("Expected `int` keyword in function declaration.");
-    }
-
-    const auto name_token = parser.advance_token();
-    if(name_token.token_type != token_type_t::IDENTIFIER) {
-        throw std::runtime_error("Expected identifier name in function declaration.");
-    }
-
-    if(parser.peek_token().token_type == token_type_t::LEFT_PAREN) {
-        parser.advance_token();
-        auto param_list = parse_function_definition_parameter_list(parser);
-        parser.expect_token(token_type_t::RIGHT_PAREN, "Expected `)` in function declaration.");
-
-        if(parser.peek_token().token_type == token_type_t::SEMICOLON) {
-            parser.advance_token();
-
-            return ast::function_declaration_t{ create_type_name_from_token(type_token), ast::func_name_t(name_token.token_text), parse_function_declaration_parameter_list(param_list) };
-        }
-
-        ast::compound_statement_t statements = parse_compound_statement(parser);
-
-        if(name_token.token_text == "main") {
-            constexpr int DEFAULT_RETURN_VALUE = 0;
-            // use `has_return_statement` instead of `is_return_statement` because we don't need to emit a return statement if there already is one,
-            //  even if there is unreachable code after the already existing return statement.
-            if(statements.stmts.size() == 0 || !has_return_statement(statements)) {
-                statements.stmts.push_back(ast::return_statement_t { ast::expression_t{ ast::constant_t{DEFAULT_RETURN_VALUE}, make_primitive_type_t(ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t)) } } );
-            }
-        }
-
-        return ast::function_definition_t{ create_type_name_from_token(type_token), ast::func_name_t(name_token.token_text), std::move(param_list), std::move(statements) };
-    } else {
-        if(parser.peek_token().token_type != token_type_t::EQUALS) {
-            auto ret = ast::global_variable_declaration_t{create_type_name_from_token(type_token), ast::var_name_t(name_token.token_text), std::nullopt};
-        
-            parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in global variable declaration.");
-
-            return ret;
-        }
-
-        parser.advance_token(); // consume `=` token
-
-        auto ret = ast::global_variable_declaration_t{create_type_name_from_token(type_token), ast::var_name_t(name_token.token_text), parse_expression(parser)};
-
-        parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in global variable declaration.");
-
-        return ret;
-    }
-}
-
-ast::program_t parse(parser_t& parser) {
-    std::vector<std::variant<ast::function_declaration_t, ast::function_definition_t, ast::global_variable_declaration_t>> top_level_declarations;
-    while(parser.peek_token().token_type != token_type_t::EOF_TOK) {
-        top_level_declarations.push_back(parse_top_level_declaration(parser));
-    }
-    return ast::program_t { parser.symbol_info.type_table, std::move(top_level_declarations) };
-}
+ast::function_declaration_t parse_function_declaration(parser_t& parser, const token_t type_token, const token_t name_token, std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>>&& param_list) {
+    parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in function declaration.");
 
 
+    auto function_declaration = ast::function_declaration_t{ create_type_name_from_token(type_token), ast::func_name_t(name_token.token_text), parse_function_declaration_parameter_list(param_list) };
 
-
-
-
-
-
-
-
-
-
-void validate_function_declaration(validation_t& validation, const ast::function_declaration_t& function_declaration) {
-    if(utils::contains(validation.global_variable_declarations, function_declaration.function_name) || utils::contains(validation.global_variable_definitions, function_declaration.function_name)) {
+    if(utils::contains(parser.symbol_info.global_variable_declarations, function_declaration.function_name) || utils::contains(parser.symbol_info.global_variable_definitions, function_declaration.function_name)) {
         throw "Function [" + function_declaration.function_name + "] is already declared as a global variable.";
     }
 
-    if(utils::contains(validation.function_declarations_lookup, function_declaration.function_name)) {
-        const auto existing_function_declaration = validation.function_declarations_lookup.at(function_declaration.function_name);
-        validate_type_name(function_declaration.return_type, existing_function_declaration.return_type, "Function [" + function_declaration.function_name + "] return type mismatch.");
-        if(function_declaration.params.size() != existing_function_declaration.params.size()) {
-            throw std::runtime_error("Function [" + function_declaration.function_name + "] param count mismatch.");
-        }
-        for(std::uint32_t i = 0u; i < function_declaration.params.size(); ++i) {
-            validate_type_name(function_declaration.params[i], existing_function_declaration.params[i], "Function [" + function_declaration.function_name + "] param type mismatch.");
-        }
-    } else if(utils::contains(validation.function_definitions_lookup, function_declaration.function_name)) {
-        const auto existing_function_definition = validation.function_definitions_lookup.at(function_declaration.function_name);
+    if(utils::contains(parser.symbol_info.function_definitions_lookup, function_declaration.function_name)) {
+        const auto existing_function_definition = parser.symbol_info.function_definitions_lookup.at(function_declaration.function_name);
         validate_type_name(function_declaration.return_type, existing_function_definition.return_type, "Function [" + function_declaration.function_name + "] return type mismatch.");
         if(function_declaration.params.size() != existing_function_definition.params.size()) {
             throw std::runtime_error("Function [" + function_declaration.function_name + "] param count mismatch.");
@@ -848,129 +805,249 @@ void validate_function_declaration(validation_t& validation, const ast::function
         for(std::uint32_t i = 0u; i < function_declaration.params.size(); ++i) {
             validate_type_name(function_declaration.params[i], existing_function_definition.params[i].first, "Function [" + function_declaration.function_name + "] param type mismatch.");
         }
+    }
+    if(utils::contains(parser.symbol_info.function_declarations_lookup, function_declaration.function_name)) {
+        const auto existing_function_declaration = parser.symbol_info.function_declarations_lookup.at(function_declaration.function_name);
+        validate_type_name(function_declaration.return_type, existing_function_declaration.return_type, "Function [" + function_declaration.function_name + "] return type mismatch.");
+        if(function_declaration.params.size() != existing_function_declaration.params.size()) {
+            throw std::runtime_error("Function [" + function_declaration.function_name + "] param count mismatch.");
+        }
+        for(std::uint32_t i = 0u; i < function_declaration.params.size(); ++i) {
+            validate_type_name(function_declaration.params[i], existing_function_declaration.params[i], "Function [" + function_declaration.function_name + "] param type mismatch.");
+        }
     } else {
-        validation.function_declarations_lookup.insert({function_declaration.function_name, function_declaration});
-    }
-}
-void validate_expression(validation_t& validation, ast::expression_t& expression) {
-    std::visit(overloaded{
-        [&validation, &expression](const std::shared_ptr<ast::grouping_t>& grouping_exp) {
-            validate_expression(validation, grouping_exp->expr);
-        },
-        [&validation, &expression](const std::shared_ptr<ast::unary_expression_t>& unary_exp) {
-            validate_expression(validation, unary_exp->exp);
-        },
-        [&validation, &expression](const std::shared_ptr<ast::binary_expression_t>& bin_exp) {
-            validate_expression(validation, bin_exp->left);
-            validate_expression(validation, bin_exp->right);
-        },
-        [&validation, &expression](const std::shared_ptr<ast::ternary_expression_t>& ternary) {
-            validate_expression(validation, ternary->condition);
-            validate_expression(validation, ternary->if_true);
-            validate_expression(validation, ternary->if_false);
-        },
-        [&validation, &expression](const std::shared_ptr<ast::function_call_t>& func_call) {
-            validate_function_call(validation, *func_call);
-            add_type_to_function_call(validation, *func_call, expression.type); // will set `expression.type` to the return type of the accompanying function
-        },
-        [&validation](const ast::constant_t& expression) {
-            // TODO: consider adding types to constant expressions here instead of earlier in the initial parsing pass
-        },
-        [&validation, &expression](const ast::var_name_t& var_name) {
-            validate_variable(validation, var_name);
-            add_type_to_variable(validation, var_name, expression.type); // will set `expression.type` to the type of the variable from its declaration
-        },
-        [](const std::shared_ptr<ast::convert_t>& convert_exp) {
-            throw std::runtime_error("User casts not yet supported.");
-        }
-    }, expression.expr);
-}
-void validate_statement(validation_t& validation, ast::statement_t& statement) {
-    std::visit(overloaded{
-        [&validation](ast::return_statement_t& statement) {
-            validate_expression(validation, statement.expr);
-        },
-        [&validation](ast::expression_statement_t& statement) {
-            if(statement.expr.has_value()) {
-                validate_expression(validation, statement.expr.value());
-            }
-        },
-        [&validation](const std::shared_ptr<ast::if_statement_t>& statement) {
-            validate_expression(validation, statement->if_exp);
-            validate_statement(validation, statement->if_body);
-            if(statement->else_body.has_value()) {
-                validate_statement(validation, statement->else_body.value());
-            }
-        },
-        [&validation](const std::shared_ptr<ast::compound_statement_t>& statement) {
-            validate_compound_statement(validation, *statement);
-        }
-    }, statement);
-}
-void validate_compound_statement(validation_t& validation, ast::compound_statement_t& compound_statement, bool is_function_block) {
-    if(!is_function_block) {
-        validation.variable_lookup.create_new_scope();
-    }
-    for(auto& e : compound_statement.stmts) {
-        std::visit(overloaded{
-            [&validation](ast::statement_t& statement) {
-                validate_statement(validation, statement);
-            },
-            [&validation](ast::declaration_t& declaration) {
-                validate_variable_declaration(validation, declaration);
-            },
-        }, e);
-    }
-    if(!is_function_block) {
-        validation.variable_lookup.destroy_current_scope();
-    }
-}
-void validate_function_definition(validation_t& validation, const ast::function_definition_t& function_definition) {
-    if(utils::contains(validation.global_variable_declarations, function_definition.function_name) || utils::contains(validation.global_variable_definitions, function_definition.function_name)) {
-        throw "Function [" + function_definition.function_name + "] is already declared as a global variable.";
+        parser.symbol_info.function_declarations_lookup.insert({function_declaration.function_name, function_declaration});
     }
 
-    if(utils::contains(validation.function_definitions_lookup, function_definition.function_name)) {
-        throw std::runtime_error("Function [" + function_definition.function_name + "] already defined.");
-    }
-    if(utils::contains(validation.function_declarations_lookup, function_definition.function_name)) {
-        const auto existing_function_declaration = validation.function_declarations_lookup.at(function_definition.function_name);
-        validate_type_name(function_definition.return_type, existing_function_declaration.return_type, "Function [" + function_definition.function_name + "] return type mismatch.");
-        if(function_definition.params.size() != existing_function_declaration.params.size()) {
-            throw std::runtime_error("Function [" + function_definition.function_name + "] param count mismatch.");
-        }
-        for(std::uint32_t i = 0u; i < function_definition.params.size(); ++i) {
-            validate_type_name(function_definition.params[i].first, existing_function_declaration.params[i], "Function [" + function_definition.function_name + "] param type mismatch.");
-        }
-    }
-    validation.function_definitions_lookup.insert({function_definition.function_name, function_definition});
-    validation.variable_lookup.create_new_scope();
-    for(const auto param : function_definition.params) {
-        if(param.second.has_value()) {
-            validation.variable_lookup.add_new_variable_in_current_scope(param.second.value(), param.first);
-        }
-    }
-    auto& validation_function_definition = validation.function_definitions_lookup.at(function_definition.function_name);
-    validate_compound_statement(validation, validation_function_definition.statements, true);
-    validation.variable_lookup.destroy_current_scope();
+
+    return function_declaration;
 }
-void validate_function_call(validation_t& validation, const ast::function_call_t& function_call) {
-    if(utils::contains(validation.function_declarations_lookup, function_call.function_name)) {
-        const auto declaration = validation.function_declarations_lookup.at(function_call.function_name);
-        if(declaration.params.size() != function_call.params.size()) {
-            throw std::runtime_error("Function [" + function_call.function_name + "] param count mismatch.");
+ast::function_definition_t parse_function_definition(parser_t& parser, const token_t type_token, const token_t name_token, std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>>&& param_list) {
+    auto type = create_type_name_from_token(type_token);
+    auto name = ast::func_name_t(name_token.token_text);
+
+    if(utils::contains(parser.symbol_info.global_variable_declarations, name) || utils::contains(parser.symbol_info.global_variable_definitions, name)) {
+        throw "Function [" + name + "] is already declared as a global variable.";
+    }
+
+    if(utils::contains(parser.symbol_info.function_definitions_lookup, name)) {
+        throw std::runtime_error("Function [" + name + "] already defined.");
+    }
+
+
+    if(utils::contains(parser.symbol_info.function_declarations_lookup, name)) {
+        const auto existing_function_declaration = parser.symbol_info.function_declarations_lookup.at(name);
+        validate_type_name(type, existing_function_declaration.return_type, "Function [" + name + "] return type mismatch.");
+        if(param_list.size() != existing_function_declaration.params.size()) {
+            throw std::runtime_error("Function [" + name + "] param count mismatch.");
         }
-        // TODO: type check parameters to function call
-    } else if(utils::contains(validation.function_definitions_lookup, function_call.function_name)) {
-        const auto definition = validation.function_definitions_lookup.at(function_call.function_name);
-        if(definition.params.size() != function_call.params.size()) {
-            throw std::runtime_error("Function [" + function_call.function_name + "] param count mismatch.");
+        for(std::uint32_t i = 0u; i < param_list.size(); ++i) {
+            validate_type_name(param_list[i].first, existing_function_declaration.params[i], "Function [" + name + "] param type mismatch.");
         }
-        // TODO: type check parameters to function call
     } else {
-        throw std::runtime_error("Function [" + function_call.function_name + "] not declared or defined.");
+        // We add it to the function declaration table even though it is not a function definition because then we can do parsing and symbol validation all
+        //  at once while still supporting recursion in the body of the function definition with no prior function declaration without hackiness.
+        // We don't need to remove the function declaration once we're done because the function declarations do not matter after symbol validation.
+        // And a function definition is a stronger statement than a function declaration anyways and can be redeclared infinite times (as long as they all match).
+        ast::function_declaration_t function_declaration = ast::function_declaration_t{ type, name, parse_function_declaration_parameter_list(param_list) };
+        parser.symbol_info.function_declarations_lookup.insert({name, std::move(function_declaration)});
+    }
+
+    parser.symbol_info.variable_lookup.create_new_scope();
+    for(const auto& param : param_list) {
+        if(param.second.has_value()) {
+            parser.symbol_info.variable_lookup.add_new_variable_in_current_scope(param.second.value(), param.first);
+        }
+    }
+    ast::compound_statement_t function_body_statements = parse_and_validate_compound_statement(parser, true);
+    parser.symbol_info.variable_lookup.destroy_current_scope();
+
+
+    if(name_token.token_text == "main" && type_token.token_text == "int") {
+        constexpr int DEFAULT_RETURN_VALUE = 0;
+        // use `has_return_statement` instead of `is_return_statement` because we don't need to emit a return statement if there already is one,
+        //  even if there is unreachable code after the already existing return statement.
+        if(function_body_statements.stmts.size() == 0 || !has_return_statement(function_body_statements)) {
+            function_body_statements.stmts.push_back(ast::return_statement_t { ast::expression_t{ ast::constant_t{DEFAULT_RETURN_VALUE}, make_primitive_type_t(ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t)) } } );
+        }
+    }
+
+    ast::function_definition_t function_definition = ast::function_definition_t{ std::move(type), name, std::move(param_list), std::move(function_body_statements) };
+
+    parser.symbol_info.function_definitions_lookup.insert({std::move(name), std::move(function_definition)});
+
+    return function_definition;
+}
+std::variant<ast::function_declaration_t, ast::function_definition_t> parse_function_decl_or_def(parser_t& parser, const token_t type_token, const token_t name_token) {
+    parser.expect_token(token_type_t::LEFT_PAREN, "Expected '(' in function declaration/definition.");
+
+    auto param_list = parse_function_definition_parameter_list(parser);
+
+    parser.expect_token(token_type_t::RIGHT_PAREN, "Expected `)` in function declaration/definition.");
+
+    const auto next_token = parser.peek_token();
+    if(next_token.token_type == token_type_t::SEMICOLON) {
+        return parse_function_declaration(parser, type_token, name_token, std::move(param_list));
+    } else if(next_token.token_type == token_type_t::LEFT_CURLY) {
+        return parse_function_definition(parser, type_token, name_token, std::move(param_list));
+    } else {
+        throw std::runtime_error("Expected either `;` or `{` in function declaration/definition.");
     }
 }
+std::variant<ast::function_declaration_t, ast::function_definition_t, ast::global_variable_declaration_t> parse_function_or_global(parser_t& parser) {
+    const auto type_token = parser.advance_token();
+    if(!is_a_type(type_token)) {
+        throw std::logic_error("Expected a type identifier in function or global variable declaration/definition.");
+    }
+
+    const auto name_token = parser.advance_token();
+    if(name_token.token_type != token_type_t::IDENTIFIER) {
+        throw std::logic_error("Expected a identifier name in function or global variable declaration/definition.");
+    }
+
+    const auto next_token = parser.peek_token();
+    if(next_token.token_type == token_type_t::LEFT_PAREN) {
+        return parse_function_decl_or_def(parser, type_token, name_token); // parses either a function declaration or definition
+    } else if(next_token.token_type == token_type_t::EQUALS) {
+        return parse_global_variable_definition(parser, type_token, name_token);
+    } else if(next_token.token_type == token_type_t::SEMICOLON) {
+        return parse_global_variable_declaration(parser, type_token, name_token);
+    } else {
+        throw std::runtime_error("Expected either global variable declaration, global variable definition, or start of function.");
+    }
+}
+ast::type_t parse_and_validate_struct_body(parser_t& parser, const ast::type_name_t& name) {
+    parser.expect_token(token_type_t::LEFT_CURLY, "Expected `{` in struct definition.");
+
+    std::vector<ast::type_t> struct_field_types;
+    std::vector<std::string> struct_field_names;
+
+    while(parser.peek_token().token_type != token_type_t::RIGHT_CURLY) {
+        auto field_type = parse_and_validate_type(parser);
+
+        std::vector<std::string> field_names_in_line;
+        auto field_name = parser.advance_token();
+        if(field_name.token_type != token_type_t::IDENTIFIER) {
+            throw std::logic_error("Expected identifier name in struct definition for field.");
+        }
+        field_names_in_line.push_back(std::string(field_name.token_text));
+
+        while(parser.peek_token().token_type == token_type_t::COMMA) {
+            parser.advance_token();
+            field_name = parser.advance_token();
+            if(field_name.token_type != token_type_t::IDENTIFIER) {
+                throw std::logic_error("Expected identifier name in struct definition for field.");
+            }
+            field_names_in_line.push_back(std::string(field_name.token_text));
+        }
+
+        parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in struct definition.");
+
+        for(auto& field_name : field_names_in_line) {
+            struct_field_types.push_back(field_type);
+            struct_field_names.push_back(std::move(field_name));
+        }
+    }
+
+    parser.expect_token(token_type_t::RIGHT_CURLY, "Expected `}` in struct definition.");
+    parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in struct definition.");
+
+    return make_struct_definition_type_t(parser.symbol_info.type_table, name, std::move(struct_field_types), std::move(struct_field_names));
+}
+ast::type_t parse_struct(parser_t& parser) {
+    parser.expect_token(token_type_t::STRUCT_KEYWORD, "Expected `struct` keyword in struct declaration/definition.");
+
+    const auto name_token = parser.advance_token();
+    if(name_token.token_type != token_type_t::IDENTIFIER) {
+        throw std::logic_error("Expected identifier name in struct declaration/definition.");
+    }
+    auto name = ast::type_name_t(name_token.token_text);
+
+    auto& struct_type_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::STRUCT));
+
+    const auto next_token = parser.peek_token();
+    if(next_token.token_type == token_type_t::SEMICOLON) {
+        parse.advance_token();
+        // parse struct declaration
+        if(!utils::contains(struct_type_table, name)) {
+            auto struct_forward_decl = make_struct_forward_decl_type_t(name);
+            struct_type_table.insert({name, struct_forward_decl});
+            return struct_forward_decl;
+        }
+    } else if(next_token.token_type == token_type_t::LEFT_CURLY) {
+        // parse struct definition
+        if(!utils::contains(struct_type_table, name) || !struct_type_table.at(name).size.has_value()) {
+            auto struct_definition = parse_and_validate_struct_body(parser, name);
+            // TODO: Double check the C++ docs to make sure this is equivalent to:
+            // struct_type_table.at(name) = std::move(struct_definition);
+            // for when there is already a struct declaration entry at `name`a
+            struct_type_table.insert({name, std::move(struct_definition)}); // should overwrite any struct declaration entry that was previously written to `struct_type_table.at(name)`
+        } else {
+            throw std::runtime_error("Struct [" + name + "] already defined.");
+        }
+    } else {
+        throw std::runtime_error("Expected either `;` or `{` in struct declaration/definition.");
+    }
+}
+ast::type_t parse_typedef(parser_t& parser) {
+    parser.expect_token(token_type_t::TYPEDEF_KEYWORD, "Expected `typedef` keyword in typedef declaration.");
+
+    if(is_struct_keyword(parser.peek_token())) {
+        
+    } else if(is_keyword_a_type(parser.peek_token().token_type)) { // if the next token is a primitive type
+
+    } else { // type being aliased must be a typedef/non-primitive type name
+        
+    }
+}
+std::variant<ast::function_declaration_t, ast::function_definition_t, ast::global_variable_declaration_t, ast::type_t> parse_top_level_declaration(parser_t& parser) {
+    const auto first_token = parser.peek_token();
+    if(is_a_type(first_token)) {
+        return parse_function_or_global(parser); // parses either a global variable declaration/definition, function declaration, or function definition
+    }
+
+    if(is_struct_keyword(first_token)) {
+        return parse_struct(parser); // parses either a struct declaration or struct definition
+    }
+
+    if(is_typedef_keyword(first_token)) {
+        return parse_typedef(parser);
+    }
+
+    throw std::runtime_error("Unrecognized top level declaration/definition.");
+}
+
+ast::validated_program_t parse(parser_t& parser) {
+    add_floating_point_types_to_type_table(parser);
+    add_integer_types_to_type_table(parser);
+    add_unsigned_integer_types_to_type_table(parser);
+
+    while(parser.peek_token().token_type != token_type_t::EOF_TOK) {
+        parse_top_level_declaration(parser);
+    }
+
+    ast::validated_program_t validated_program{};
+    for(const auto& it : parser.symbol_info.function_definitions_lookup) {
+        validated_program.top_level_declarations.push_back(it.second);
+    }
+    for(const auto& it : parser.symbol_info.global_variable_definitions) {
+        ast::validated_global_variable_definition_t validated_definition{it.second.type_name, it.first, evaluate_expression(it.second.value.value())};
+
+        validated_program.top_level_declarations.push_back(validated_definition);
+    }
+    for(const auto& it : parser.symbol_info.global_variable_declarations) {
+        if(!utils::contains(parser.symbol_info.global_variable_definitions, it.first)) {
+            ast::validated_global_variable_definition_t validated_definition{it.second.type_name, it.first, ast::constant_t{0}};
+
+            validated_program.top_level_declarations.push_back(validated_definition);
+        }
+    }
+    return validated_program;
+}
+
+
+
+
 void validate_compile_time_expression(validation_t& validation, const ast::expression_t& expression) {
     std::visit(overloaded{
         [&validation](const std::shared_ptr<ast::grouping_t>& expression) {
@@ -1043,38 +1120,7 @@ void validate_global_variable_declaration(validation_t& validation, const ast::g
         validation.global_variable_declarations.insert({declaration.var_name, declaration}); // idempotent operation
     }
 }
-ast::validated_program_t validate_ast(const ast::program_t& program) {
-    validation_t validation;
-    for(const auto& top_level_decl : program.top_level_declarations) {
-        std::visit(overloaded{
-            [&validation](const ast::function_declaration_t& function_decl) {
-                validate_function_declaration(validation, function_decl);
-            },
-            [&validation](const ast::function_definition_t& function_def) {
-                validate_function_definition(validation, function_def);
-            },
-            [&validation](const ast::global_variable_declaration_t& declaration) {
-                validate_global_variable_declaration(validation, declaration);
-            }
-        }, top_level_decl);
-    }
 
-    ast::validated_program_t validated_program{};
-    for(const auto& it : validation.function_definitions_lookup) {
-        validated_program.top_level_declarations.push_back(it.second);
-    }
-    for(const auto& it : validation.global_variable_definitions) {
-        ast::validated_global_variable_definition_t validated_definition{it.second.type_name, it.first, evaluate_expression(it.second.value.value())};
 
-        validated_program.top_level_declarations.push_back(validated_definition);
-    }
-    for(const auto& it : validation.global_variable_declarations) {
-        if(!utils::contains(validation.global_variable_definitions, it.first)) {
-            ast::validated_global_variable_definition_t validated_definition{it.second.type_name, it.first, ast::constant_t{0}};
 
-            validated_program.top_level_declarations.push_back(validated_definition);
-        }
-    }
-    return validated_program;
-}
 

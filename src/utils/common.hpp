@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <string_view>
 #include <cctype>
+#include <variant>
 
 
 template<class... Ts>
@@ -30,6 +31,15 @@ inline bool is_alpha_num(const char c) {
 
 inline bool match_caseless_char(const char c1, const char c2) {
     return tolower(c1) == tolower(c2);
+}
+
+template<typename T, typename... Ts>
+inline T variant_adapter(const std::variant<Ts...>& v) {
+    return std::visit(overloaded {
+        [](const auto& v) -> T {
+            return v;
+        }
+    }, v);
 }
 
 template<typename T>
