@@ -25,7 +25,7 @@ struct constant_t {
 
 constexpr std::size_t NUMBER_OF_TYPE_CATEGORIES = 5;
 enum class type_category_t {
-    INT, UNSIGNED_INT, DOUBLE,
+    INT, UNSIGNED_INT, FLOATING,
     STRUCT,
     TYPEDEF,
 };
@@ -53,8 +53,9 @@ struct ternary_expression_t;
 struct function_call_t;
 // `std::shared_ptr` is to get around not having full recursive type definitions in C++
 // TODO: maybe use `std::unique_ptr` instead of `std::shared_ptr`
+using expression_exp_type_t = std::variant<std::shared_ptr<grouping_t>, std::shared_ptr<convert_t>, std::shared_ptr<unary_expression_t>, std::shared_ptr<binary_expression_t>, std::shared_ptr<ternary_expression_t>, std::shared_ptr<function_call_t>, constant_t, var_name_t>;
 struct expression_t {
-    std::variant<std::shared_ptr<grouping_t>, std::shared_ptr<convert_t>, std::shared_ptr<unary_expression_t>, std::shared_ptr<binary_expression_t>, std::shared_ptr<ternary_expression_t>, std::shared_ptr<function_call_t>, constant_t, var_name_t> expr;
+    expression_exp_type_t expr;
     std::optional<type_t> type; // usually has `std::nullopt` if not a literal after initial parsing stage. Is filled in during semantic analysis and type checking pass (as we often need symbol tables).
 };
 
@@ -165,6 +166,10 @@ struct validated_program_t {
 inline ast::expression_t make_convert_t(ast::expression_t&& expr, ast::type_t type) {
     return ast::expression_t{ std::make_shared<ast::convert_t>(ast::convert_t{std::move(expr)}), type};
 }
+inline std::unique_ptr<ast::grouping_t> make_grouping(ast::expression_t&& exp) {
+    return std::make_unique<ast::grouping_t>(ast::grouping_t{std::move(exp)});
+}
+
 
 // TODO: maybe I should make these functions actually add the types to the type table in addition to just constructing/returning them
 // Does NOT add the type to the type_table; it is merely a convenience factory function that returns a constructed `type_t`.
@@ -179,6 +184,12 @@ inline ast::type_t make_typedef_type_t(const ast::type_table_t& type_table, ast:
         }
     }
     return ast::type_t{ast::type_category_t::TYPEDEF, std::move(type_name), aliased_type_category, aliased_type, std::nullopt, std::nullopt, {}, {}};
+}
+inline ast::type_t make_typedef_with_anonymous_struct_t(const ast::type_table_t& type_table, ast::type_name_t type_name, ast::type_t anonymous_struct_definition) {
+    if(anonymous_struct_definition.type_category != ast::type_category_t::STRUCT) {
+        throw std::runtime_error("Expected struct type when constructing typedef to anonymous struct");
+    }
+    return ast::type_t{ast::type_category_t::TYPEDEF, std::move(type_name), ast::type_category_t::STRUCT, ast::type_name_t(""), anonymous_struct_definition.alignment.value(), anonymous_struct_definition.size.value(), std::move(anonymous_struct_definition.field_offsets), std::move(anonymous_struct_definition.fields)};
 }
 inline ast::type_t make_struct_forward_decl_type_t(ast::type_name_t type_name) {
     return ast::type_t{ast::type_category_t::STRUCT, std::move(type_name), std::nullopt, std::nullopt, std::nullopt, std::nullopt, {}, {}};
@@ -212,12 +223,17 @@ inline ast::type_t make_struct_definition_type_t(const ast::type_table_t& type_t
     }
     return ast::type_t{ast::type_category_t::STRUCT, std::move(type_name), std::nullopt, std::nullopt, struct_size, struct_alignment, std::move(field_offsets), std::move(field_types)};
 }
+inline ast::type_t make_anonymous_struct_definition_type_t(const ast::type_table_t& type_table, std::vector<ast::type_t> field_types, std::vector<std::string> field_names) {
+    return make_struct_definition_type_t(type_table, "", std::move(field_types), std::move(field_names));
+}
 
 
 // defined in middle_end/typing/generate_typing.cpp:
 bool compare_type_names(const ast::type_t& lhs, const ast::type_t& rhs);
 
 // defined in frontend/parsing/parser.cpp:
-ast::type_t create_type_name_from_token(const token_t& token);
+#if 0
+ast::type_t create_type_from_token(const token_t& token);
+#endif
 bool has_return_statement(const ast::compound_statement_t& compound_stmt);
 

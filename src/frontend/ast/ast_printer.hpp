@@ -17,4 +17,3 @@ void print_function_definition(bool has_types, const ast::function_definition_t&
 
 void print_validated_global_variable_definition(const ast::validated_global_variable_definition_t& global_var_def);
 void print_validated_ast(const ast::validated_program_t& validated_program);
-void print_ast(const ast::program_t& program);

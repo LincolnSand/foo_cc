@@ -9,6 +9,50 @@ void validate_type_name(const ast::type_t& expected, const ast::type_t& actual, 
     }
 }
 
+
+
+// TODO: refactor and double check the implementation
+void validate_compile_time_expression(validation_t& validation, const ast::expression_t& expression) {
+    std::visit(overloaded{
+        [&validation](const std::shared_ptr<ast::grouping_t>& expression) {
+            validate_compile_time_expression(validation, expression->expr);
+        },
+        [&validation](const std::shared_ptr<ast::unary_expression_t>& expression) {
+            if(expression->op == ast::unary_operator_token_t::PLUS_PLUS || expression->op == ast::unary_operator_token_t::MINUS_MINUS) {
+                throw std::runtime_error("`++` and `--` not supported in compile time expressions.");
+            }
+            validate_compile_time_expression(validation, expression->exp);
+        },
+        [&validation](const std::shared_ptr<ast::binary_expression_t>& expression) {
+            if(expression->op == ast::binary_operator_token_t::ASSIGNMENT) {
+                throw std::runtime_error("Assignment not supported in compile time expressions.");
+            }
+            validate_compile_time_expression(validation, expression->left);
+            validate_compile_time_expression(validation, expression->right);
+        },
+        [&validation](const std::shared_ptr<ast::ternary_expression_t>& expression) {
+            validate_compile_time_expression(validation, expression->condition);
+            validate_compile_time_expression(validation, expression->if_true);
+            validate_compile_time_expression(validation, expression->if_false);
+        },
+        [](const std::shared_ptr<ast::function_call_t>& expression) {
+            throw std::runtime_error("Function calls not supported in compile time expressions.");
+        },
+        [](const ast::constant_t& expression) {
+            // totally fine, no need to go further as this is a terminal node of the AST
+        },
+        [](const ast::var_name_t& expression) {
+            throw std::runtime_error("Variables not supported in compile time expressions.");
+            // TODO: Maybe support referencing other global variables???? Check the C standard to see what is considered valid.
+        },
+        [&validation](const std::shared_ptr<ast::convert_t>& expression) {
+            validate_compile_time_expression(validation, expression->expr);
+        }
+    }, expression.expr);
+}
+
+
+
 // TODO: maybe pull out and make globally accessible
 static bool is_keyword_a_type(token_type_t token_type) {
     switch(token_type) {
@@ -53,59 +97,60 @@ static ast::type_category_t get_type_category_from_token_type(token_type_t token
         case token_type_t::CHAR_CONSTANT:
         case token_type_t::CHAR_KEYWORD:
         case token_type_t::SIGNED_CHAR_KEYWORD:
-        case token_type_t::UNSIGNED_CHAR_KEYWORD:
         case token_type_t::SHORT_KEYWORD:
-        case token_type_t::UNSIGNED_SHORT_KEYWORD:
         case token_type_t::INT_CONSTANT:
         case token_type_t::INT_KEYWORD:
-        case token_type_t::UNSIGNED_INT_CONSTANT:
-        case token_type_t::UNSIGNED_INT_KEYWORD:
         case token_type_t::LONG_CONSTANT:
         case token_type_t::LONG_KEYWORD:
-        case token_type_t::UNSIGNED_LONG_CONSTANT:
-        case token_type_t::UNSIGNED_LONG_KEYWORD:
         case token_type_t::LONG_LONG_CONSTANT:
         case token_type_t::LONG_LONG_KEYWORD:
+            return ast::type_category_t::INT;
+        case token_type_t::UNSIGNED_CHAR_KEYWORD:
+        case token_type_t::UNSIGNED_SHORT_KEYWORD:
+        case token_type_t::UNSIGNED_INT_CONSTANT:
+        case token_type_t::UNSIGNED_INT_KEYWORD:
+        case token_type_t::UNSIGNED_LONG_CONSTANT:
+        case token_type_t::UNSIGNED_LONG_KEYWORD:
         case token_type_t::UNSIGNED_LONG_LONG_CONSTANT:
         case token_type_t::UNSIGNED_LONG_LONG_KEYWORD:
-            return ast::type_category_t::INT;
+            return ast::type_category_t::UNSIGNED_INT;
         case token_type_t::FLOAT_CONSTANT:
         case token_type_t::FLOAT_KEYWORD:
         case token_type_t::DOUBLE_CONSTANT:
         case token_type_t::DOUBLE_KEYWORD:
         case token_type_t::LONG_DOUBLE_CONSTANT:
         case token_type_t::LONG_DOUBLE_KEYWORD:
-            return ast::type_category_t::DOUBLE;
+            return ast::type_category_t::FLOATING;
     }
     throw std::runtime_error("Invalid/Unsupported type: [" + std::to_string(static_cast<std::uint32_t>(token_type)) + std::string("]"));
 }
-static std::string get_type_name_from_token(token_t token) {
-    // TODO: Write utility function to remove code duplication in these if statement conditionals
-    if(token.token_type == token_type_t::CHAR_CONSTANT) {
-        return "char";
-    } else if(token.token_type == token_type_t::INT_CONSTANT) {
-        return "int";
-    } else if(token.token_type == token_type_t::UNSIGNED_INT_CONSTANT) {
-        return "unsigned int";
-    } else if(token.token_type == token_type_t::LONG_CONSTANT) {
-        return "long";
-    } else if(token.token_type == token_type_t::UNSIGNED_LONG_CONSTANT) {
-        return "unsigned long";
-    } else if(token.token_type == token_type_t::LONG_LONG_CONSTANT) {
-        return "long long";
-    } else if(token.token_type == token_type_t::UNSIGNED_LONG_LONG_CONSTANT) {
-        return "unsigned long long";
-    } else if(token.token_type == token_type_t::FLOAT_CONSTANT) {
-        return "float";
-    } else if(token.token_type == token_type_t::DOUBLE_CONSTANT) {
-        return "double";
-    } else if(token.token_type == token_type_t::LONG_DOUBLE_CONSTANT) {
-        return "long double";
-    } else {
-        return std::string(token.token_text);
+static ast::type_name_t get_type_name_from_token(token_t token) {
+    switch(token.token_type) {
+        case token_type_t::CHAR_CONSTANT:
+            return "char";
+        case token_type_t::INT_CONSTANT:
+            return "int";
+        case token_type_t::UNSIGNED_INT_CONSTANT:
+            return "unsigned int";
+        case token_type_t::LONG_CONSTANT:
+            return "long";
+        case token_type_t::UNSIGNED_LONG_CONSTANT:
+            return "unsigned long";
+        case token_type_t::LONG_LONG_CONSTANT:
+            return "long long";
+        case token_type_t::UNSIGNED_LONG_LONG_CONSTANT:
+            return "unsigned long long";
+        case token_type_t::FLOAT_CONSTANT:
+            return "float";
+        case token_type_t::DOUBLE_CONSTANT:
+            return "double";
+        case token_type_t::LONG_DOUBLE_CONSTANT:
+            return "long double";
+        default:
+            return std::string(token.token_text);
     }
 }
-static std::size_t get_size_from_type(const std::string& type_name) {
+static std::size_t get_size_from_type(const ast::type_name_t& type_name) {
     if(type_name == "char" || type_name == "signed char" || type_name == "unsigned char") {
         return sizeof(char);
     } else if(type_name == "short" || type_name == "unsigned short") {
@@ -126,7 +171,7 @@ static std::size_t get_size_from_type(const std::string& type_name) {
         throw std::runtime_error("Unsupported type: [" + type_name + std::string("]"));
     }
 }
-static std::size_t get_alignment_from_type(const std::string& type_name) {
+static std::size_t get_alignment_from_type(const ast::type_name_t& type_name) {
     // `get_alignment_from_type()` and `get_size_from_type()` will diverge once we implement structs and other non-primitive types
     if(type_name == "char" || type_name == "signed char" || type_name == "unsigned char") {
         return alignof(char);
@@ -148,12 +193,49 @@ static std::size_t get_alignment_from_type(const std::string& type_name) {
         throw std::runtime_error("Unsupported type: [" + type_name + std::string("]"));
     }
 }
-ast::type_t create_type_name_from_token(const token_t& token) {
+
+static ast::type_name_t primitive_token_keyword_to_name(token_type_t token_type) {
+    switch(token_type) {
+        case token_type_t::CHAR_KEYWORD:
+            return "char";
+        case token_type_t::SIGNED_CHAR_KEYWORD:
+            return "signed char";
+        case token_type_t::UNSIGNED_CHAR_KEYWORD:
+            return "unsigned char";
+        case token_type_t::SHORT_KEYWORD:
+            return "short";
+        case token_type_t::UNSIGNED_SHORT_KEYWORD:
+            return "unsigned short";
+        case token_type_t::INT_KEYWORD:
+            return "int";
+        case token_type_t::UNSIGNED_INT_KEYWORD:
+            return "unsigned int";
+        case token_type_t::LONG_KEYWORD:
+            return "long";
+        case token_type_t::UNSIGNED_LONG_KEYWORD:
+            return "unsigned long";
+        case token_type_t::LONG_LONG_KEYWORD:
+            return "long long";
+        case token_type_t::UNSIGNED_LONG_LONG_KEYWORD:
+            return "unsigned long long";
+        case token_type_t::FLOAT_KEYWORD:
+            return "float";
+        case token_type_t::DOUBLE_KEYWORD:
+            return "double";
+        case token_type_t::LONG_DOUBLE_KEYWORD:
+            return "long double";
+    }
+    throw std::runtime_error("Not a primitive type keyword.");
+}
+
+#if 0
+ast::type_t create_type_from_token(const token_t& token) {
     std::string type_name = get_type_name_from_token(token);
     const std::size_t type_size = get_size_from_type(type_name);
     const std::size_t alignment_size = get_alignment_from_type(type_name);
     return make_primitive_type_t(get_type_category_from_token_type(token.token_type), std::move(type_name), type_size, alignment_size);
 }
+#endif
 bool has_return_statement(const ast::compound_statement_t& compound_stmt) {
     for(const auto& stmt : compound_stmt.stmts) {
         if(is_return_statement(stmt)) {
@@ -164,7 +246,7 @@ bool has_return_statement(const ast::compound_statement_t& compound_stmt) {
 }
 
 template<typename T>
-ast::constant_t parse_constant(parser_t& parser, const std::size_t suffix_size = 0u) {
+static ast::constant_t parse_constant(parser_t& parser, const std::size_t suffix_size = 0u) {
     auto next = parser.advance_token();
     if(!is_constant(next)) {
         throw std::runtime_error("Invalid constant: [" + std::to_string(static_cast<std::uint32_t>(next.token_type)) + std::string("]"));
@@ -174,36 +256,37 @@ ast::constant_t parse_constant(parser_t& parser, const std::size_t suffix_size =
     utils::str_to_T(next.token_text, result, suffix_size);
     return ast::constant_t { result };
 }
-ast::expression_t parse_char_constant(parser_t& parser) {
+static ast::expression_t parse_char_constant(parser_t& parser) {
     return ast::expression_t { ast::constant_t { parser.advance_token().token_text[1] }, make_primitive_type_t(ast::type_category_t::INT, "char", sizeof(char), sizeof(char)) };
 }
-ast::expression_t parse_int_constant(parser_t& parser) {
+static ast::expression_t parse_int_constant(parser_t& parser) {
     return ast::expression_t { parse_constant<int>(parser), make_primitive_type_t(ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t)) };
 }
-ast::expression_t parse_unsigned_int_constant(parser_t& parser) {
+static ast::expression_t parse_unsigned_int_constant(parser_t& parser) {
     return ast::expression_t { parse_constant<unsigned int>(parser, 1), make_primitive_type_t(ast::type_category_t::UNSIGNED_INT, "unsigned int", sizeof(std::int32_t), alignof(std::int32_t)) };
 }
-ast::expression_t parse_long_constant(parser_t& parser) {
+static ast::expression_t parse_long_constant(parser_t& parser) {
     return ast::expression_t { parse_constant<long>(parser, 1), make_primitive_type_t(ast::type_category_t::INT, "long", sizeof(std::int64_t), alignof(std::int64_t)) };
 }
-ast::expression_t parse_unsigned_long_constant(parser_t& parser) {
+static ast::expression_t parse_unsigned_long_constant(parser_t& parser) {
     return ast::expression_t { parse_constant<unsigned long>(parser, 2), make_primitive_type_t(ast::type_category_t::UNSIGNED_INT, "unsigned long", sizeof(std::uint64_t), alignof(std::uint64_t)) };
 }
-ast::expression_t parse_long_long_constant(parser_t& parser) {
+static ast::expression_t parse_long_long_constant(parser_t& parser) {
     return ast::expression_t { parse_constant<long long>(parser, 2), make_primitive_type_t(ast::type_category_t::INT, "long long", sizeof(std::int64_t), alignof(std::int64_t)) };
 }
-ast::expression_t parse_unsigned_long_long_constant(parser_t& parser) {
+static ast::expression_t parse_unsigned_long_long_constant(parser_t& parser) {
     return ast::expression_t { parse_constant<unsigned long long>(parser, 3), make_primitive_type_t(ast::type_category_t::UNSIGNED_INT, "unsigned long long", sizeof(std::uint64_t), alignof(std::uint64_t)) };
 }
-ast::expression_t parse_float_constant(parser_t& parser) {
-    return ast::expression_t { parse_constant<float>(parser, 1), make_primitive_type_t(ast::type_category_t::DOUBLE, "float", sizeof(float), alignof(float)) };
+static ast::expression_t parse_float_constant(parser_t& parser) {
+    return ast::expression_t { parse_constant<float>(parser, 1), make_primitive_type_t(ast::type_category_t::FLOATING, "float", sizeof(float), alignof(float)) };
 }
-ast::expression_t parse_double_constant(parser_t& parser) {
-    return ast::expression_t { parse_constant<double>(parser), make_primitive_type_t(ast::type_category_t::DOUBLE, "double", sizeof(double), alignof(double)) };
+static ast::expression_t parse_double_constant(parser_t& parser) {
+    return ast::expression_t { parse_constant<double>(parser), make_primitive_type_t(ast::type_category_t::FLOATING, "double", sizeof(double), alignof(double)) };
 }
-ast::expression_t parse_long_double_constant(parser_t& parser) {
-    return ast::expression_t { parse_constant<long double>(parser, 1), make_primitive_type_t(ast::type_category_t::DOUBLE, "long double", sizeof(long double), alignof(long double)) };
+static ast::expression_t parse_long_double_constant(parser_t& parser) {
+    return ast::expression_t { parse_constant<long double>(parser, 1), make_primitive_type_t(ast::type_category_t::FLOATING, "long double", sizeof(long double), alignof(long double)) };
 }
+
 std::shared_ptr<ast::grouping_t> parse_grouping(parser_t& parser) {
     parser.expect_token(token_type_t::LEFT_PAREN, "Expected '(' in grouping expression.");
     auto exp = parse_and_validate_expression(parser, 0u);
@@ -313,10 +396,9 @@ std::variant<ast::var_name_t, std::shared_ptr<ast::function_call_t>> parse_and_v
     }
 }
 ast::expression_t parse_prefix_expression(parser_t& parser) {
-    std::cout << "Non-Error Prefix Expression: " << static_cast<std::uint32_t>(parser.peek_token().token_type) << ": " << parser.peek_token().token_text << std::endl;
     switch(parser.peek_token().token_type) {
         case token_type_t::IDENTIFIER:
-            return {parse_and_validate_variable_or_function_call(parser), std::nullopt};
+            return {utils::variant_adapter<ast::expression_exp_type_t>(parse_and_validate_variable_or_function_call(parser)), std::nullopt};
         case token_type_t::CHAR_CONSTANT:
             return parse_char_constant(parser);
         case token_type_t::INT_CONSTANT:
@@ -605,7 +687,318 @@ ast::expression_t parse_and_validate_expression(parser_t& parser) {
     return parse_and_validate_expression(parser, 0u);
 }
 
-ast::return_statement_t parse_return_statement(parser_t& parser) {
+ast::type_t make_primitive_type(token_type_t token_type) {
+    auto type_name = primitive_token_keyword_to_name(token_type);
+    return ast::type_t{get_type_category_from_token_type(token_type), type_name, std::nullopt, std::nullopt, get_size_from_type(type_name), get_alignment_from_type(type_name), {}, {}};
+}
+
+void add_floating_point_types_to_type_table(parser_t& parser) {
+    auto& floating_point_symbol_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::FLOATING));
+    floating_point_symbol_table.insert({"float", make_primitive_type(token_type_t::FLOAT_KEYWORD)});
+    floating_point_symbol_table.insert({"double", make_primitive_type(token_type_t::DOUBLE_KEYWORD)});
+    floating_point_symbol_table.insert({"long double", make_primitive_type(token_type_t::LONG_DOUBLE_KEYWORD)});
+}
+void add_integer_types_to_type_table(parser_t& parser) {
+    auto& integer_symbol_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::INT));
+    integer_symbol_table.insert({"char", make_primitive_type(token_type_t::CHAR_KEYWORD)});
+    integer_symbol_table.insert({"signed char", make_primitive_type(token_type_t::SIGNED_CHAR_KEYWORD)});
+    integer_symbol_table.insert({"short", make_primitive_type(token_type_t::SHORT_KEYWORD)});
+    integer_symbol_table.insert({"int", make_primitive_type(token_type_t::INT_KEYWORD)});
+    integer_symbol_table.insert({"long", make_primitive_type(token_type_t::LONG_KEYWORD)});
+    integer_symbol_table.insert({"long long", make_primitive_type(token_type_t::LONG_LONG_KEYWORD)});
+}
+void add_unsigned_integer_types_to_type_table(parser_t& parser) {
+    auto& unsigned_integer_symbol_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::UNSIGNED_INT));
+    unsigned_integer_symbol_table.insert({"unsigned char", make_primitive_type(token_type_t::UNSIGNED_CHAR_KEYWORD)});
+    unsigned_integer_symbol_table.insert({"unsigned short", make_primitive_type(token_type_t::UNSIGNED_SHORT_KEYWORD)});
+    unsigned_integer_symbol_table.insert({"unsigned int", make_primitive_type(token_type_t::UNSIGNED_INT_KEYWORD)});
+    unsigned_integer_symbol_table.insert({"unsigned long", make_primitive_type(token_type_t::UNSIGNED_LONG_KEYWORD)});
+    unsigned_integer_symbol_table.insert({"unsigned long long", make_primitive_type(token_type_t::UNSIGNED_LONG_LONG_KEYWORD)});
+}
+
+bool is_a_type(const parser_t& parser) {
+    if(is_struct_keyword(parser.peek_token())) {
+        const auto identifier_token = parser.peek_token_n(1);
+        auto type_name = ast::type_name_t(identifier_token.token_text);
+        auto& struct_type_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::STRUCT));
+        auto struct_type_iter = struct_type_table.find(type_name);
+        if(struct_type_iter != std::end(struct_type_table) && struct_type_iter->second.size.has_value()) {
+            return true;
+        }
+        return false;
+    }
+    if(is_keyword_a_type(parser.peek_token().token_type)) {
+        return true;
+    }
+    auto type_name = ast::type_name_t(parser.peek_token().token_text);
+    auto& typedef_type_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::TYPEDEF));
+    if(typedef_type_table.find(type_name) != std::end(typedef_type_table)) {
+        return true;
+    }
+    return false;
+}
+
+bool is_a_type_token(parser_t& parser, token_t token) {
+    if(is_keyword_a_type(token.token_type)) {
+        return true;
+    }
+    auto type_name = ast::type_name_t(token.token_text);
+    auto& typedef_type_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::TYPEDEF));
+    if(typedef_type_table.find(type_name) != std::end(typedef_type_table)) {
+        return true;
+    }
+    return false;
+}
+
+ast::type_t parse_type_name_from_token(parser_t& parser, token_t token) {
+    if(is_keyword_a_type(token.token_type)) {
+        // Return the primitive type associated with it
+        const ast::type_category_t type_category = get_type_category_from_token_type(token.token_type);
+        auto type_name = ast::type_name_t(token.token_text);
+        auto& type_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(type_category));
+        auto type_iter = type_table.find(type_name);
+        if(type_iter == std::end(type_table)) {
+            throw std::runtime_error("Type not found.");
+        }
+        return type_iter->second;
+    } else {
+        // Check whether it is a valid typedef name
+        auto type_name = ast::type_name_t(token.token_text);
+        auto& type_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::TYPEDEF));
+        auto type_iter = type_table.find(type_name);
+        if(type_iter == std::end(type_table)) {
+            throw std::runtime_error("Type not found.");
+        }
+        return type_iter->second;
+    }
+}
+ast::type_t parse_struct_name_from_token(parser_t& parser, token_t token) {
+    // Check whether struct exists with the next token's name (if identifier type)
+    // Since we don't currently support pointers, if the struct type only has a forward declaration, we will throw as it is an invalid type to instantiate
+    auto type_name = ast::type_name_t(token.token_text);
+    auto& type_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::STRUCT));
+    auto type_iter = type_table.find(type_name);
+    if(type_iter == std::end(type_table)) {
+        throw std::runtime_error("Type not found.");
+    }
+    if(!type_iter->second.size.has_value()) {
+        throw std::runtime_error("Cannot instantiate struct forward declaration.");
+    }
+    return type_iter->second;
+}
+
+ast::global_variable_declaration_t parse_global_variable_declaration(parser_t& parser, ast::type_t var_type, token_t name_token) {
+    parser.expect_token(token_type_t::SEMICOLON, "Expected `;` at end of global variable declaration.");
+
+    auto var_name = ast::var_name_t(name_token.token_text);
+
+    if(utils::contains(parser.symbol_info.function_declarations_lookup, var_name) || utils::contains(parser.symbol_info.function_definitions_lookup, var_name)) {
+        throw std::runtime_error("Global variable [" + var_name + "] already declared as a function.");
+    }
+
+    if(utils::contains(parser.symbol_info.global_variable_declarations, var_name)) {
+        auto existing_declaration = parser.symbol_info.global_variable_declarations.at(var_name);
+
+        validate_type_name(existing_declaration.type_name, var_type, "Mismatched global variable type.");
+    }
+    if(utils::contains(parser.symbol_info.global_variable_definitions, var_name)) {
+        auto existing_definition = parser.symbol_info.global_variable_definitions.at(var_name);
+
+        validate_type_name(existing_definition.type_name, var_type, "Mismatched global variable type.");
+    }
+
+    auto global_var_declaration = ast::global_variable_declaration_t{std::move(var_type), var_name, std::nullopt};
+
+    parser.symbol_info.global_variable_declarations.insert({std::move(var_name), global_var_declaration}); // idempotent operation
+
+    return global_var_declaration;
+}
+ast::global_variable_declaration_t parse_global_variable_definition(parser_t& parser, ast::type_t var_type, token_t name_token) {
+    parser.expect_token(token_type_t::EQUALS, "Expected `=` in global variable definition.");
+
+    auto expression = parse_and_validate_expression(parser);
+
+    parser.expect_token(token_type_t::SEMICOLON, "Expected `;` at end of global variable definition.");
+
+    auto var_name = ast::var_name_t(name_token.token_text);
+
+    if(utils::contains(parser.symbol_info.function_declarations_lookup, var_name) || utils::contains(parser.symbol_info.function_definitions_lookup, var_name)) {
+        throw std::runtime_error("Global variable [" + var_name + "] already declared as a function.");
+    }
+
+    if(utils::contains(parser.symbol_info.global_variable_definitions, var_name)) {
+        throw std::runtime_error("Global variable [" + var_name + "] already defined.");
+    }
+
+    if(utils::contains(parser.symbol_info.global_variable_declarations, var_name)) {
+        auto existing_declaration = parser.symbol_info.global_variable_declarations.at(var_name);
+
+        validate_type_name(existing_declaration.type_name, var_type, "Mismatched global variable type.");
+    }
+
+    validate_compile_time_expression(parser.symbol_info, expression);
+
+    auto global_var_definition = ast::global_variable_declaration_t{std::move(var_type), var_name, std::move(expression)};
+
+    parser.symbol_info.global_variable_definitions.insert({std::move(var_name), global_var_definition}); // idempotent operation
+
+    return global_var_definition;
+}
+
+ast::type_t parse_and_validate_typedef_struct_body(parser_t& parser, const ast::type_name_t& name) {
+    parser.expect_token(token_type_t::LEFT_CURLY, "Expected `{` in struct definition.");
+
+    std::vector<ast::type_t> struct_field_types;
+    std::vector<std::string> struct_field_names;
+
+    while(parser.peek_token().token_type != token_type_t::RIGHT_CURLY) {
+        auto field_type = parse_and_validate_type(parser);
+
+        std::vector<std::string> field_names_in_line;
+        auto field_name = parser.advance_token();
+        if(field_name.token_type != token_type_t::IDENTIFIER) {
+            throw std::logic_error("Expected identifier name in struct definition for field.");
+        }
+        field_names_in_line.push_back(std::string(field_name.token_text));
+
+        while(parser.peek_token().token_type == token_type_t::COMMA) {
+            parser.advance_token();
+            field_name = parser.advance_token();
+            if(field_name.token_type != token_type_t::IDENTIFIER) {
+                throw std::logic_error("Expected identifier name in struct definition for field.");
+            }
+            field_names_in_line.push_back(std::string(field_name.token_text));
+        }
+
+        parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in struct definition.");
+
+        for(auto& field_name : field_names_in_line) {
+            struct_field_types.push_back(field_type);
+            struct_field_names.push_back(std::move(field_name));
+        }
+    }
+
+    parser.expect_token(token_type_t::RIGHT_CURLY, "Expected `}` in struct definition.");
+
+    return make_struct_definition_type_t(parser.symbol_info.type_table, name, std::move(struct_field_types), std::move(struct_field_names));
+}
+
+ast::type_t parse_and_validate_anonymous_typedef_struct_definition(parser_t& parser) {
+    parser.expect_token(token_type_t::LEFT_CURLY, "Expected `{` in struct definition.");
+
+    std::vector<ast::type_t> struct_field_types;
+    std::vector<std::string> struct_field_names;
+
+    while(parser.peek_token().token_type != token_type_t::RIGHT_CURLY) {
+        auto field_type = parse_and_validate_type(parser);
+
+        std::vector<std::string> field_names_in_line;
+        auto field_name = parser.advance_token();
+        if(field_name.token_type != token_type_t::IDENTIFIER) {
+            throw std::logic_error("Expected identifier name in struct definition for field.");
+        }
+        field_names_in_line.push_back(std::string(field_name.token_text));
+
+        while(parser.peek_token().token_type == token_type_t::COMMA) {
+            parser.advance_token();
+            field_name = parser.advance_token();
+            if(field_name.token_type != token_type_t::IDENTIFIER) {
+                throw std::logic_error("Expected identifier name in struct definition for field.");
+            }
+            field_names_in_line.push_back(std::string(field_name.token_text));
+        }
+
+        parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in struct definition.");
+
+        for(auto& field_name : field_names_in_line) {
+            struct_field_types.push_back(field_type);
+            struct_field_names.push_back(std::move(field_name));
+        }
+    }
+
+    parser.expect_token(token_type_t::RIGHT_CURLY, "Expected `}` in struct definition.");
+
+    return make_anonymous_struct_definition_type_t(parser.symbol_info.type_table, std::move(struct_field_types), std::move(struct_field_names));
+}
+
+ast::type_t parse_and_validate_type(parser_t& parser) {
+    if(is_struct_keyword(parser.peek_token())) {
+        // Check whether struct exists with the next token's name (if identifier type)
+        // Since we don't currently support pointers, if the struct type only has a forward declaration, we will throw as it is an invalid type to instantiate
+        parser.advance_token();
+        const auto type_token = parser.advance_token();
+        auto type_name = ast::type_name_t(type_token.token_text);
+        auto& type_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::STRUCT));
+        auto type_iter = type_table.find(type_name);
+        if(type_iter == std::end(type_table)) {
+            throw std::runtime_error("Type not found.");
+        }
+        if(!type_iter->second.size.has_value()) {
+            throw std::runtime_error("Cannot instantiate struct forward declaration.");
+        }
+        return type_iter->second;
+    } else if(is_keyword_a_type(parser.peek_token().token_type)) {
+        // Return the primitive type associated with it
+        const auto type_token = parser.advance_token();
+        const ast::type_category_t type_category = get_type_category_from_token_type(type_token.token_type);
+        auto type_name = ast::type_name_t(type_token.token_text);
+        auto& type_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(type_category));
+        auto type_iter = type_table.find(type_name);
+        if(type_iter == std::end(type_table)) {
+            throw std::runtime_error("Type not found.");
+        }
+        return type_iter->second;
+    } else {
+        // Check whether it is a valid typedef name
+        const auto type_token = parser.advance_token();
+        auto type_name = ast::type_name_t(type_token.token_text);
+        auto& type_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::TYPEDEF));
+        auto type_iter = type_table.find(type_name);
+        if(type_iter == std::end(type_table)) {
+            throw std::runtime_error("Type not found.");
+        }
+        return type_iter->second;
+    }
+}
+ast::type_t parse_typedef_struct_decl_or_def(parser_t& parser) {
+    parser.expect_token(token_type_t::STRUCT_KEYWORD, "Expected `struct` keyword in struct declaration/definition.");
+
+    const auto name_token = parser.advance_token();
+    if(name_token.token_type == token_type_t::IDENTIFIER) {
+        auto name = ast::type_name_t(name_token.token_text);
+
+        auto& struct_type_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::STRUCT));
+
+        const auto next_token = parser.peek_token();
+        if(next_token.token_type == token_type_t::LEFT_CURLY) {
+            // parse struct definition
+            if(!utils::contains(struct_type_table, name) || !struct_type_table.at(name).size.has_value()) {
+                auto struct_definition = parse_and_validate_typedef_struct_body(parser, name);
+                // TODO: Double check the C++ docs to make sure this is equivalent to:
+                // struct_type_table.at(name) = std::move(struct_definition);
+                // for when there is already a struct declaration entry at `name`a
+                struct_type_table.insert({name, struct_definition}); // should overwrite any struct declaration entry that was previously written to `struct_type_table.at(name)`
+                return struct_definition;
+            }
+            throw std::runtime_error("Struct [" + name + "] already defined.");
+        }
+        else {
+            parser.advance_token();
+            // parse struct declaration
+            auto struct_forward_decl = make_struct_forward_decl_type_t(name);
+            if(!utils::contains(struct_type_table, name)) {
+                struct_type_table.insert({name, struct_forward_decl});
+            }
+            return struct_forward_decl;
+        }
+    } else if(name_token.token_type == token_type_t::IDENTIFIER) {
+        return parse_and_validate_anonymous_typedef_struct_definition(parser);
+    } else {
+        throw std::logic_error("Expected identifier name in struct declaration/definition.");
+    }
+}
+
+ast::return_statement_t parse_and_validate_return_statement(parser_t& parser) {
     parser.expect_token(token_type_t::RETURN_KEYWORD, "Expected `return` keyword in statement.");
 
     auto expression = parse_and_validate_expression(parser);
@@ -670,11 +1063,7 @@ ast::statement_t parse_and_validate_statement(parser_t& parser) {
     return parse_and_validate_expression_statement(parser);
 }
 ast::declaration_t parse_and_validate_declaration(parser_t& parser) {
-    const auto type_token = parser.advance_token();
-    if(!is_a_type(type_token)) {
-        std::cout << static_cast<std::uint32_t>(type_token.token_type) << ": " << type_token.token_text << std::endl;
-        throw std::runtime_error("Expected type name in declaration.");
-    }
+    const auto type = parse_and_validate_type(parser);
 
     auto identifier_token = parser.advance_token();
     if(identifier_token.token_type != token_type_t::IDENTIFIER) {
@@ -686,8 +1075,6 @@ ast::declaration_t parse_and_validate_declaration(parser_t& parser) {
     if(parser.symbol_info.variable_lookup.contains_in_lowest_scope(var_name)) {
         throw std::runtime_error("Variable " + var_name + " already declared in current scope.");
     }
-
-    auto type = create_type_name_from_token(type_token);
 
     if(parser.peek_token().token_type != token_type_t::EQUALS) {
         auto ret = ast::declaration_t{type, var_name, std::nullopt};
@@ -723,7 +1110,7 @@ ast::compound_statement_t parse_and_validate_compound_statement(parser_t& parser
             throw std::runtime_error("Unexpected end of file. Unterminated compound statement.");
         }
 
-        if(is_a_type(parser.peek_token())) {
+        if(is_a_type(parser)) {
             ret.stmts.push_back(parse_and_validate_declaration(parser));
         } else {
             ret.stmts.push_back(parse_and_validate_statement(parser));
@@ -748,25 +1135,39 @@ static std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>> parse
             current_param.push_back(parser.advance_token());
         }
 
+        if(param_list.size() != 0 && current_param.size() == 0) {
+            throw std::runtime_error("You have a trailing comma in your parameter list.");
+        }
+
         if(current_param.size() == 0) {
             break; // empty param list. e.g. `int main();`
         } else if(current_param.size() == 1) {
-            // TODO: Only integer types are supported in parameter lists currently
-            if(current_param[0].token_type != token_type_t::INT_KEYWORD) {
+            if(!is_a_type_token(parser, current_param[0])) {
                 throw std::runtime_error("Expected identifier name (type name) in function declaration.");
             }
-            param_list.push_back({create_type_name_from_token(current_param[0]), std::nullopt});
+            param_list.push_back({parse_type_name_from_token(parser, current_param[0]), std::nullopt});
         } else if(current_param.size() == 2) {
-            // TODO: Only integer types are supported in parameter lists currently
-            if(current_param[0].token_type != token_type_t::INT_KEYWORD) {
-                throw std::runtime_error("Expected identifier name (type name) in function declaration.");
+            if(is_struct_keyword(current_param[0])) {
+                param_list.push_back({parse_struct_name_from_token(parser, current_param[0]), std::nullopt});
+            } else {
+                if(!is_a_type_token(parser, current_param[0])) {
+                    throw std::runtime_error("Expected identifier name (type name) in function declaration.");
+                }
+                if(current_param[1].token_type != token_type_t::IDENTIFIER) {
+                    throw std::runtime_error("Expected identifier name (variable name) in function declaration.");
+                }
+                param_list.push_back({parse_type_name_from_token(parser, current_param[0]), std::make_optional(ast::var_name_t{current_param[1].token_text})});
             }
-            if(current_param[1].token_type != token_type_t::IDENTIFIER) {
+        } else if(current_param.size() == 3) {
+            if(!is_struct_keyword(current_param[0])) {
+                throw std::runtime_error("Expected `struct` keyword in parameter list.");
+            }
+            if(current_param[2].token_type != token_type_t::IDENTIFIER) {
                 throw std::runtime_error("Expected identifier name (variable name) in function declaration.");
             }
-            param_list.push_back({create_type_name_from_token(current_param[0]), std::make_optional(ast::var_name_t{current_param[1].token_text})});
+            param_list.push_back({parse_struct_name_from_token(parser, current_param[1]), std::make_optional(ast::var_name_t{current_param[2].token_text})});
         } else {
-            throw std::runtime_error("Unexpected token in function definition param list.");
+            throw std::runtime_error("Unexpected token in function definition parameter list.");
         }
 
         if(parser.peek_token().token_type == token_type_t::COMMA) {
@@ -774,7 +1175,7 @@ static std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>> parse
         } else if(parser.peek_token().token_type == token_type_t::RIGHT_PAREN) {
             break;
         } else {
-            throw std::logic_error("Unexpected token in function definition param list."); // should be impossible to trigger
+            throw std::logic_error("Unexpected token in function definition parameter list."); // should be impossible to trigger
         }
     }
     return param_list;
@@ -786,11 +1187,11 @@ static std::vector<ast::type_t> parse_function_declaration_parameter_list(std::v
     }
     return ret_type_list;
 }
-ast::function_declaration_t parse_function_declaration(parser_t& parser, const token_t type_token, const token_t name_token, std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>>&& param_list) {
+ast::function_declaration_t parse_function_declaration(parser_t& parser, ast::type_t type, const token_t name_token, std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>>&& param_list) {
     parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in function declaration.");
 
 
-    auto function_declaration = ast::function_declaration_t{ create_type_name_from_token(type_token), ast::func_name_t(name_token.token_text), parse_function_declaration_parameter_list(param_list) };
+    auto function_declaration = ast::function_declaration_t{ type, ast::func_name_t(name_token.token_text), parse_function_declaration_parameter_list(param_list) };
 
     if(utils::contains(parser.symbol_info.global_variable_declarations, function_declaration.function_name) || utils::contains(parser.symbol_info.global_variable_definitions, function_declaration.function_name)) {
         throw "Function [" + function_declaration.function_name + "] is already declared as a global variable.";
@@ -822,8 +1223,7 @@ ast::function_declaration_t parse_function_declaration(parser_t& parser, const t
 
     return function_declaration;
 }
-ast::function_definition_t parse_function_definition(parser_t& parser, const token_t type_token, const token_t name_token, std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>>&& param_list) {
-    auto type = create_type_name_from_token(type_token);
+ast::function_definition_t parse_function_definition(parser_t& parser, ast::type_t type, const token_t name_token, std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>>&& param_list) {
     auto name = ast::func_name_t(name_token.token_text);
 
     if(utils::contains(parser.symbol_info.global_variable_declarations, name) || utils::contains(parser.symbol_info.global_variable_definitions, name)) {
@@ -863,7 +1263,7 @@ ast::function_definition_t parse_function_definition(parser_t& parser, const tok
     parser.symbol_info.variable_lookup.destroy_current_scope();
 
 
-    if(name_token.token_text == "main" && type_token.token_text == "int") {
+    if(name_token.token_text == "main" && type.type_name == "int") {
         constexpr int DEFAULT_RETURN_VALUE = 0;
         // use `has_return_statement` instead of `is_return_statement` because we don't need to emit a return statement if there already is one,
         //  even if there is unreachable code after the already existing return statement.
@@ -874,11 +1274,11 @@ ast::function_definition_t parse_function_definition(parser_t& parser, const tok
 
     ast::function_definition_t function_definition = ast::function_definition_t{ std::move(type), name, std::move(param_list), std::move(function_body_statements) };
 
-    parser.symbol_info.function_definitions_lookup.insert({std::move(name), std::move(function_definition)});
+    parser.symbol_info.function_definitions_lookup.insert({std::move(name), function_definition});
 
     return function_definition;
 }
-std::variant<ast::function_declaration_t, ast::function_definition_t> parse_function_decl_or_def(parser_t& parser, const token_t type_token, const token_t name_token) {
+std::variant<ast::function_declaration_t, ast::function_definition_t> parse_function_decl_or_def(parser_t& parser, ast::type_t type, const token_t name_token) {
     parser.expect_token(token_type_t::LEFT_PAREN, "Expected '(' in function declaration/definition.");
 
     auto param_list = parse_function_definition_parameter_list(parser);
@@ -887,18 +1287,15 @@ std::variant<ast::function_declaration_t, ast::function_definition_t> parse_func
 
     const auto next_token = parser.peek_token();
     if(next_token.token_type == token_type_t::SEMICOLON) {
-        return parse_function_declaration(parser, type_token, name_token, std::move(param_list));
+        return parse_function_declaration(parser, type, name_token, std::move(param_list));
     } else if(next_token.token_type == token_type_t::LEFT_CURLY) {
-        return parse_function_definition(parser, type_token, name_token, std::move(param_list));
+        return parse_function_definition(parser, type, name_token, std::move(param_list));
     } else {
         throw std::runtime_error("Expected either `;` or `{` in function declaration/definition.");
     }
 }
 std::variant<ast::function_declaration_t, ast::function_definition_t, ast::global_variable_declaration_t> parse_function_or_global(parser_t& parser) {
-    const auto type_token = parser.advance_token();
-    if(!is_a_type(type_token)) {
-        throw std::logic_error("Expected a type identifier in function or global variable declaration/definition.");
-    }
+    ast::type_t type = parse_and_validate_type(parser);
 
     const auto name_token = parser.advance_token();
     if(name_token.token_type != token_type_t::IDENTIFIER) {
@@ -907,11 +1304,11 @@ std::variant<ast::function_declaration_t, ast::function_definition_t, ast::globa
 
     const auto next_token = parser.peek_token();
     if(next_token.token_type == token_type_t::LEFT_PAREN) {
-        return parse_function_decl_or_def(parser, type_token, name_token); // parses either a function declaration or definition
+        return utils::variant_adapter<std::variant<ast::function_declaration_t, ast::function_definition_t, ast::global_variable_declaration_t>>(parse_function_decl_or_def(parser, type, name_token)); // parses either a function declaration or definition
     } else if(next_token.token_type == token_type_t::EQUALS) {
-        return parse_global_variable_definition(parser, type_token, name_token);
+        return parse_global_variable_definition(parser, type, name_token);
     } else if(next_token.token_type == token_type_t::SEMICOLON) {
-        return parse_global_variable_declaration(parser, type_token, name_token);
+        return parse_global_variable_declaration(parser, type, name_token);
     } else {
         throw std::runtime_error("Expected either global variable declaration, global variable definition, or start of function.");
     }
@@ -967,13 +1364,13 @@ ast::type_t parse_struct(parser_t& parser) {
 
     const auto next_token = parser.peek_token();
     if(next_token.token_type == token_type_t::SEMICOLON) {
-        parse.advance_token();
+        parser.advance_token();
         // parse struct declaration
+        auto struct_forward_decl = make_struct_forward_decl_type_t(name);
         if(!utils::contains(struct_type_table, name)) {
-            auto struct_forward_decl = make_struct_forward_decl_type_t(name);
             struct_type_table.insert({name, struct_forward_decl});
-            return struct_forward_decl;
         }
+        return struct_forward_decl;
     } else if(next_token.token_type == token_type_t::LEFT_CURLY) {
         // parse struct definition
         if(!utils::contains(struct_type_table, name) || !struct_type_table.at(name).size.has_value()) {
@@ -981,30 +1378,111 @@ ast::type_t parse_struct(parser_t& parser) {
             // TODO: Double check the C++ docs to make sure this is equivalent to:
             // struct_type_table.at(name) = std::move(struct_definition);
             // for when there is already a struct declaration entry at `name`a
-            struct_type_table.insert({name, std::move(struct_definition)}); // should overwrite any struct declaration entry that was previously written to `struct_type_table.at(name)`
-        } else {
-            throw std::runtime_error("Struct [" + name + "] already defined.");
+            struct_type_table.insert({name, struct_definition}); // should overwrite any struct declaration entry that was previously written to `struct_type_table.at(name)`
+            return struct_definition;
         }
-    } else {
-        throw std::runtime_error("Expected either `;` or `{` in struct declaration/definition.");
+        throw std::runtime_error("Struct [" + name + "] already defined.");
     }
+    throw std::runtime_error("Expected either `;` or `{` in struct declaration/definition.");
 }
 ast::type_t parse_typedef(parser_t& parser) {
     parser.expect_token(token_type_t::TYPEDEF_KEYWORD, "Expected `typedef` keyword in typedef declaration.");
 
-    if(is_struct_keyword(parser.peek_token())) {
-        
-    } else if(is_keyword_a_type(parser.peek_token().token_type)) { // if the next token is a primitive type
+    auto& typedef_symbol_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::TYPEDEF));
 
+    if(is_struct_keyword(parser.peek_token())) {
+        // TODO: change to `auto` once these functions are implemented/declared
+        ast::type_t struct_decl_or_def = parse_typedef_struct_decl_or_def(parser);
+
+        assert(struct_decl_or_def.type_category == ast::type_category_t::STRUCT);
+
+        auto typedef_name_token = parser.advance_token();
+        if(typedef_name_token.token_type != token_type_t::IDENTIFIER) {
+            throw std::runtime_error("Expected identifier name in typedef declaration.");
+        }
+        auto typedef_name = ast::type_name_t(typedef_name_token.token_text);
+
+        parser.expect_token(token_type_t::SEMICOLON, "Expected `;` at end of typedef declaration.");
+
+        ast::type_t typedef_decl;
+        if(struct_decl_or_def.type_name != ast::type_name_t("")) {
+            typedef_decl = make_typedef_type_t(parser.symbol_info.type_table, typedef_name, struct_decl_or_def.type_category, std::move(struct_decl_or_def.type_name));
+        } else {
+            typedef_decl = make_typedef_with_anonymous_struct_t(parser.symbol_info.type_table, typedef_name, struct_decl_or_def);
+        }
+
+        auto existing_typdef_type_iter = typedef_symbol_table.find(typedef_name);
+        if(existing_typdef_type_iter == std::end(typedef_symbol_table)) {
+            typedef_symbol_table.insert({std::move(typedef_name), typedef_decl});
+        } else if(existing_typdef_type_iter->second.aliased_type.value() == ast::type_name_t("")) {
+            throw std::runtime_error("Typedef to anonymous struct already exists with the same name.");
+        } else {
+            if(existing_typdef_type_iter->second.aliased_type_category != typedef_decl.aliased_type_category || existing_typdef_type_iter->second.aliased_type != typedef_decl.aliased_type) {
+                throw std::runtime_error("Conflicting typedef declarations.");
+            }
+        }
+
+        return typedef_decl;
+    } else if(is_keyword_a_type(parser.peek_token().token_type)) { // if the next token is a primitive type
+        auto aliased_type_token = parser.advance_token();
+        auto aliased_type_name = ast::type_name_t(aliased_type_token.token_text);
+        const auto primitive_type_category = get_type_category_from_token_type(aliased_type_token.token_type);
+
+        auto typedef_name_token = parser.advance_token();
+        if(typedef_name_token.token_type != token_type_t::IDENTIFIER) {
+            throw std::runtime_error("Expected identifier name in typedef declaration.");
+        }
+        auto typedef_name = ast::type_name_t(typedef_name_token.token_text);
+
+        parser.expect_token(token_type_t::SEMICOLON, "Expected `;` at end of typedef declaration.");
+
+        ast::type_t typedef_decl = make_typedef_type_t(parser.symbol_info.type_table, typedef_name, primitive_type_category, std::move(aliased_type_name));
+
+        auto existing_typdef_type_iter = typedef_symbol_table.find(typedef_name);
+        if(existing_typdef_type_iter == std::end(typedef_symbol_table)) {
+            typedef_symbol_table.insert({std::move(typedef_name), typedef_decl});
+        } else {
+            if(existing_typdef_type_iter->second.aliased_type_category != typedef_decl.aliased_type_category || existing_typdef_type_iter->second.aliased_type != typedef_decl.aliased_type) {
+                throw std::runtime_error("Conflicting typedef declarations.");
+            }
+        }
+
+        return typedef_decl;
     } else { // type being aliased must be a typedef/non-primitive type name
-        
+        auto aliased_type_token = parser.advance_token();
+        auto aliased_type_name = ast::type_name_t(aliased_type_token.token_text);
+        if(typedef_symbol_table.find(aliased_type_name) == std::end(typedef_symbol_table)) {
+            throw std::runtime_error("Type being aliased has not been declared.");
+        }
+
+        auto typedef_name_token = parser.advance_token();
+        if(typedef_name_token.token_type != token_type_t::IDENTIFIER) {
+            throw std::runtime_error("Expected identifier name in typedef declaration.");
+        }
+        auto typedef_name = ast::type_name_t(typedef_name_token.token_text);
+
+        parser.expect_token(token_type_t::SEMICOLON, "Expected `;` at end of typedef declaration.");
+
+        ast::type_t typedef_decl = make_typedef_type_t(parser.symbol_info.type_table, typedef_name, ast::type_category_t::TYPEDEF, std::move(aliased_type_name));
+
+        auto existing_typdef_type_iter = typedef_symbol_table.find(typedef_name);
+        if(existing_typdef_type_iter == std::end(typedef_symbol_table)) {
+            typedef_symbol_table.insert({std::move(typedef_name), typedef_decl});
+        } else {
+            if(existing_typdef_type_iter->second.aliased_type_category != typedef_decl.aliased_type_category || existing_typdef_type_iter->second.aliased_type != typedef_decl.aliased_type) {
+                throw std::runtime_error("Conflicting typedef declarations.");
+            }
+        }
+
+        return typedef_decl;
     }
 }
 std::variant<ast::function_declaration_t, ast::function_definition_t, ast::global_variable_declaration_t, ast::type_t> parse_top_level_declaration(parser_t& parser) {
-    const auto first_token = parser.peek_token();
-    if(is_a_type(first_token)) {
-        return parse_function_or_global(parser); // parses either a global variable declaration/definition, function declaration, or function definition
+    if(is_a_type(parser)) { // includes struct types using the `struct` tag
+        return utils::variant_adapter<std::variant<ast::function_declaration_t, ast::function_definition_t, ast::global_variable_declaration_t, ast::type_t>>(parse_function_or_global(parser)); // parses either a global variable declaration/definition, function declaration, or function definition
     }
+
+    const auto first_token = parser.peek_token();
 
     if(is_struct_keyword(first_token)) {
         return parse_struct(parser); // parses either a struct declaration or struct definition
@@ -1022,105 +1500,42 @@ ast::validated_program_t parse(parser_t& parser) {
     add_integer_types_to_type_table(parser);
     add_unsigned_integer_types_to_type_table(parser);
 
+    std::vector<std::variant<ast::function_definition_t, ast::global_variable_declaration_t>> top_level_declarations;
     while(parser.peek_token().token_type != token_type_t::EOF_TOK) {
-        parse_top_level_declaration(parser);
+        auto top_level_decl = parse_top_level_declaration(parser);
+        std::visit(overloaded{
+            [](const ast::type_t& type) {}, // We only need to store the types in the type table, not in the top level declaration list
+            [](const ast::function_declaration_t& function_declaration) {}, // function declarations are only needed during parsing and the parser doesn't need/use `top_level_declarations`
+
+            // We can't instead use `auto&` below because of stupid C++ template nonsense where it gets confused thinking the param still might be `ast::type_t` even though it *never* can be.
+            [&top_level_declarations](const ast::function_definition_t& function_def) {
+                std::variant<ast::function_definition_t, ast::global_variable_declaration_t> top_level_decl = function_def;
+                top_level_declarations.push_back(top_level_decl);
+            },
+            [&top_level_declarations](const ast::global_variable_declaration_t& global_var) {
+                std::variant<ast::function_definition_t, ast::global_variable_declaration_t> top_level_decl = global_var;
+                top_level_declarations.push_back(top_level_decl);
+            },
+        }, top_level_decl);
     }
 
     ast::validated_program_t validated_program{};
-    for(const auto& it : parser.symbol_info.function_definitions_lookup) {
-        validated_program.top_level_declarations.push_back(it.second);
-    }
-    for(const auto& it : parser.symbol_info.global_variable_definitions) {
-        ast::validated_global_variable_definition_t validated_definition{it.second.type_name, it.first, evaluate_expression(it.second.value.value())};
-
-        validated_program.top_level_declarations.push_back(validated_definition);
-    }
-    for(const auto& it : parser.symbol_info.global_variable_declarations) {
-        if(!utils::contains(parser.symbol_info.global_variable_definitions, it.first)) {
-            ast::validated_global_variable_definition_t validated_definition{it.second.type_name, it.first, ast::constant_t{0}};
-
-            validated_program.top_level_declarations.push_back(validated_definition);
-        }
+    validated_program.type_table = parser.symbol_info.type_table;
+    for(const auto& top_level_decl : top_level_declarations) {
+        std::visit(overloaded{
+            [&validated_program](const ast::function_definition_t& function_def) {
+                validated_program.top_level_declarations.push_back(function_def);
+            }, 
+            [&validated_program](const ast::global_variable_declaration_t& global_variable) {
+                if(global_variable.value.has_value()) {
+                    ast::validated_global_variable_definition_t validated_definition{global_variable.type_name, global_variable.var_name, evaluate_expression(global_variable.value.value())};
+                    validated_program.top_level_declarations.push_back(validated_definition);
+                } else {
+                    ast::validated_global_variable_definition_t validated_definition{global_variable.type_name, global_variable.var_name, ast::constant_t{0}};
+                    validated_program.top_level_declarations.push_back(validated_definition);
+                }
+            },
+        }, top_level_decl);
     }
     return validated_program;
 }
-
-
-
-
-void validate_compile_time_expression(validation_t& validation, const ast::expression_t& expression) {
-    std::visit(overloaded{
-        [&validation](const std::shared_ptr<ast::grouping_t>& expression) {
-            validate_compile_time_expression(validation, expression->expr);
-        },
-        [&validation](const std::shared_ptr<ast::unary_expression_t>& expression) {
-            if(expression->op == ast::unary_operator_token_t::PLUS_PLUS || expression->op == ast::unary_operator_token_t::MINUS_MINUS) {
-                throw std::runtime_error("`++` and `--` not supported in compile time expressions.");
-            }
-            validate_compile_time_expression(validation, expression->exp);
-        },
-        [&validation](const std::shared_ptr<ast::binary_expression_t>& expression) {
-            if(expression->op == ast::binary_operator_token_t::ASSIGNMENT) {
-                throw std::runtime_error("Assignment not supported in compile time expressions.");
-            }
-            validate_compile_time_expression(validation, expression->left);
-            validate_compile_time_expression(validation, expression->right);
-        },
-        [&validation](const std::shared_ptr<ast::ternary_expression_t>& expression) {
-            validate_compile_time_expression(validation, expression->condition);
-            validate_compile_time_expression(validation, expression->if_true);
-            validate_compile_time_expression(validation, expression->if_false);
-        },
-        [](const std::shared_ptr<ast::function_call_t>& expression) {
-            throw std::runtime_error("Function calls not supported in compile time expressions.");
-        },
-        [](const ast::constant_t& expression) {
-            // totally fine, no need to go further as this is a terminal node of the AST
-        },
-        [](const ast::var_name_t& expression) {
-            throw std::runtime_error("Variables not supported in compile time expressions.");
-            // TODO: Maybe support referencing other global variables???? Check the C standard to see what is considered valid.
-        },
-        [&validation](const std::shared_ptr<ast::convert_t>& expression) {
-            validate_compile_time_expression(validation, expression->expr);
-        }
-    }, expression.expr);
-}
-void validate_global_variable_declaration(validation_t& validation, const ast::global_variable_declaration_t& declaration) {
-    if(utils::contains(validation.function_declarations_lookup, declaration.var_name) || utils::contains(validation.function_definitions_lookup, declaration.var_name)) {
-        throw std::runtime_error("Global variable [" + declaration.var_name + "] already declared as a function.");
-    }
-
-    if(declaration.value.has_value()) {
-        if(utils::contains(validation.global_variable_definitions, declaration.var_name)) {
-            throw std::runtime_error("Global variable [" + declaration.var_name + "] already defined.");
-        }
-
-        if(utils::contains(validation.global_variable_declarations, declaration.var_name)) {
-            auto existing_declaration = validation.global_variable_declarations.at(declaration.var_name);
-
-            validate_type_name(existing_declaration.type_name, declaration.type_name, "Mismatched global variable type.");
-        }
-
-        validate_compile_time_expression(validation, declaration.value.value());
-
-        validation.global_variable_definitions.insert({declaration.var_name, declaration}); // idempotent operation
-    } else { // this part of the C standard diverges from C++ since you are not required to preface declarations with `extern` in C, but you are in C++.
-        if(utils::contains(validation.global_variable_declarations, declaration.var_name)) {
-            auto existing_declaration = validation.global_variable_declarations.at(declaration.var_name);
-
-            validate_type_name(existing_declaration.type_name, declaration.type_name, "Mismatched global variable type.");
-        }
-        if(utils::contains(validation.global_variable_definitions, declaration.var_name)) {
-            auto existing_definition = validation.global_variable_definitions.at(declaration.var_name);
-
-            validate_type_name(existing_definition.type_name, declaration.type_name, "Mismatched global variable type.");
-        }
-
-        validation.global_variable_declarations.insert({declaration.var_name, declaration}); // idempotent operation
-    }
-}
-
-
-
-

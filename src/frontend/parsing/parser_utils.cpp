@@ -17,9 +17,6 @@ bool is_constant(token_t token) {
     }
     return false;
 }
-bool is_var_name(token_t token) {
-    return token.token_type == token_type_t::IDENTIFIER;
-}
 
 ast::var_name_t validate_lvalue_expression_exp(const ast::expression_t& expr) {
     return std::visit(overloaded{
@@ -67,8 +64,4 @@ ast::var_name_t validate_lvalue_expression_exp(const ast::expression_t& expr) {
             return "";
         }
     }, expr.expr);
-}
-
-std::unique_ptr<ast::grouping_t> make_grouping(ast::expression_t&& exp) {
-    return std::make_unique<ast::grouping_t>(ast::grouping_t{std::move(exp)});
 }

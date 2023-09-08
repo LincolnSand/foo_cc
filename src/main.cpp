@@ -5,7 +5,7 @@
 #include <frontend/lexing/lexer.hpp>
 #include <frontend/parsing/parser.hpp>
 #include <frontend/ast/ast_printer.hpp>
-#include <middle_end/typing/type_checker.hpp>
+//#include <middle_end/typing/type_checker.hpp>
 //#include <backend/x86_64/traverse_ast.hpp>
 
 
@@ -28,23 +28,14 @@ int main(int argc, char** argv) {
         lexer_t lexer(file_contents.c_str());
         std::vector<token_t> tokens_list = scan_all_tokens(lexer);
 
-        for(const auto& token : tokens_list) {
-            std::cout << "token: " << static_cast<std::uint32_t>(token.token_type) << ": " << token.token_text << std::endl;
-        }
-
         parser_t parser(tokens_list);
-        ast::program_t ast = parse(parser);
+        ast::validated_program_t ast = parse(parser);
 
-        ast::validated_program_t valid_ast = validate_ast(ast);
+        print_validated_ast(ast);
 
-        print_ast(ast);
-        print_validated_ast(valid_ast);
+        //type_check(ast); // mutates `valid_ast`
 
-        type_check(valid_ast); // mutates `valid_ast`
-
-        print_validated_ast(valid_ast);
-
-        //std::string assembly_output = generate_asm(valid_ast);
+        //std::string assembly_output = generate_asm(ast);
 
         //write_string_into_file(assembly_output, out_filename.c_str());
     } else {

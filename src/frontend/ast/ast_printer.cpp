@@ -247,19 +247,4 @@ void print_validated_ast(const ast::validated_program_t& validated_program) {
     }
     std::cout << '\n';
 }
-void print_ast(const ast::program_t& program) {
-    for(const auto& e : program.top_level_declarations) {
-        std::visit(overloaded{
-            [](const ast::function_declaration_t& function_decl) {
-                print_function_decl(function_decl);
-            },
-            [](const ast::function_definition_t& function_def) {
-                print_function_definition(false, function_def);
-            },
-            [](const ast::global_variable_declaration_t& global_var_decl) {
-                print_declaration(false, global_var_decl);
-            }
-        }, e);
-    }
-    std::cout << '\n';
-}
+

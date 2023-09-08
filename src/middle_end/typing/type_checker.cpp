@@ -8,7 +8,7 @@ bool is_arithmetic(const ast::type_t& lhs) {
     switch(lhs.type_category) {
         case ast::type_category_t::INT:
         case ast::type_category_t::UNSIGNED_INT:
-        case ast::type_category_t::DOUBLE:
+        case ast::type_category_t::FLOATING:
             return true;
     }
     return false;
@@ -71,8 +71,8 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
             if(is_arithmetic(binary_exp.left.type.value()) && is_arithmetic(binary_exp.right.type.value())) {
                 if(compare_type_names(binary_exp.left.type.value(), binary_exp.right.type.value())) {
                     type = binary_exp.left.type.value();
-                } else if(binary_exp.left.type.value().type_category == ast::type_category_t::DOUBLE) { // TODO: refactor and remove code duplication by checking if left.type.type_category == right.type.type_category
-                    if(binary_exp.right.type.value().type_category == ast::type_category_t::DOUBLE) {
+                } else if(binary_exp.left.type.value().type_category == ast::type_category_t::FLOATING) { // TODO: refactor and remove code duplication by checking if left.type.type_category == right.type.type_category
+                    if(binary_exp.right.type.value().type_category == ast::type_category_t::FLOATING) {
                         if(binary_exp.left.type.value().size > binary_exp.right.type.value().size) {
                             type = binary_exp.left.type.value();
                             binary_exp.right = make_convert_t(std::move(binary_exp.right), type.value());
@@ -86,8 +86,8 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
                         type = binary_exp.left.type.value();
                         binary_exp.right = make_convert_t(std::move(binary_exp.right), type.value());
                     }
-                } else if(binary_exp.right.type.value().type_category == ast::type_category_t::DOUBLE) {
-                    if(binary_exp.left.type.value().type_category == ast::type_category_t::DOUBLE) {
+                } else if(binary_exp.right.type.value().type_category == ast::type_category_t::FLOATING) {
+                    if(binary_exp.left.type.value().type_category == ast::type_category_t::FLOATING) {
                         if(binary_exp.left.type.value().size > binary_exp.right.type.value().size) {
                             type = binary_exp.left.type.value();
                             binary_exp.right = make_convert_t(std::move(binary_exp.right), type.value());
@@ -270,8 +270,8 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
                 type = make_primitive_type_t(ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t));
 
                 if(!compare_type_names(binary_exp.left.type.value(), binary_exp.right.type.value())) {
-                    if(binary_exp.left.type.value().type_category == ast::type_category_t::DOUBLE) {
-                        if(binary_exp.right.type.value().type_category == ast::type_category_t::DOUBLE) {
+                    if(binary_exp.left.type.value().type_category == ast::type_category_t::FLOATING) {
+                        if(binary_exp.right.type.value().type_category == ast::type_category_t::FLOATING) {
                             if(binary_exp.left.type.value().size > binary_exp.right.type.value().size) {
                                 binary_exp.right = make_convert_t(std::move(binary_exp.right), binary_exp.left.type.value());
                             } else if(binary_exp.left.type.value().size != binary_exp.right.type.value().size) {
@@ -280,8 +280,8 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
                         } else {
                             binary_exp.right = make_convert_t(std::move(binary_exp.right), binary_exp.left.type.value());
                         }
-                    } else if(binary_exp.right.type.value().type_category == ast::type_category_t::DOUBLE) {
-                        if(binary_exp.left.type.value().type_category == ast::type_category_t::DOUBLE) {
+                    } else if(binary_exp.right.type.value().type_category == ast::type_category_t::FLOATING) {
+                        if(binary_exp.left.type.value().type_category == ast::type_category_t::FLOATING) {
                             if(binary_exp.left.type.value().size > binary_exp.right.type.value().size) {
                                 binary_exp.right = make_convert_t(std::move(binary_exp.right), binary_exp.left.type.value());
                             } else if(binary_exp.left.type.value().size != binary_exp.right.type.value().size) {
@@ -381,10 +381,10 @@ void type_check_ternary_expression(std::optional<ast::type_t>& type, ast::ternar
                 type = ternary_exp.if_false.type.value();
                 ternary_exp.if_true = make_convert_t(std::move(ternary_exp.if_true), type.value());
             }
-        } else if(ternary_exp.if_true.type.value().type_category == ast::type_category_t::DOUBLE) {
+        } else if(ternary_exp.if_true.type.value().type_category == ast::type_category_t::FLOATING) {
             type = ternary_exp.if_true.type.value();
             ternary_exp.if_false = make_convert_t(std::move(ternary_exp.if_false), type.value());
-        } else if(ternary_exp.if_false.type.value().type_category == ast::type_category_t::DOUBLE) {
+        } else if(ternary_exp.if_false.type.value().type_category == ast::type_category_t::FLOATING) {
             type = ternary_exp.if_false.type.value();
             ternary_exp.if_true = make_convert_t(std::move(ternary_exp.if_true), type.value());
         } else if(ternary_exp.if_true.type.value().type_category == ast::type_category_t::UNSIGNED_INT) {
