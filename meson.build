@@ -13,7 +13,6 @@ add_global_arguments('-g', language : 'cpp')
 inc = [include_directories('src')]
 
 project_source_files = [
-    'src/main.cpp',
     'src/io/file_io.cpp',
     'src/frontend/lexing/lexer.cpp',
     'src/frontend/parsing/parser_utils.cpp',
@@ -30,10 +29,30 @@ link_arguments = [
 ]
 
 exe = executable('foo_cc',
-    project_source_files,
+    ['src/main.cpp'] + project_source_files,
     include_directories : inc,
     install : true,
     override_options: ['b_lundef=false'],
     link_args : link_arguments)
 
-test('basic', exe)
+
+tests_src = [
+    'tests/test1.cpp'
+]
+
+tests_inc = [
+
+]
+
+gtest_proj = subproject('gtest')
+gtest_dep = gtest_proj.get_variable('gtest_main_dep')
+gmock_dep = gtest_proj.get_variable('gmock_dep')
+
+test_exe = executable(
+    'gtest-all',
+    project_source_files + tests_src,
+    include_directories : inc + tests_inc,
+    dependencies : [gtest_dep, gmock_dep],
+    link_args : link_arguments)
+
+test('gtest tests', test_exe)
