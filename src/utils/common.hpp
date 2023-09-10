@@ -20,7 +20,9 @@ using line_number_t = std::uint32_t;
 
 // includes `_` as true
 inline bool is_alpha(const char c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+    return (c >= 'a' && c <= 'z')
+        || (c >= 'A' && c <= 'Z')
+        || (c == '_');
 }
 inline bool is_digit(const char c) {
     return c >= '0' && c <= '9';
@@ -47,11 +49,11 @@ inline bool str_to_T(std::string_view s, T& value, const std::size_t suffix_size
     if(s.empty()) return false;
     if(s.size() <= suffix_size) return false;
 
-    auto result = std::from_chars(s.data(), (s.data() + s.size()) - suffix_size, value);
+    auto result = std::from_chars(s.data(), (s.data() + (s.size()-suffix_size)), value);
 
     if(result.ec == std::errc::invalid_argument) return false;
 
-    if(result.ptr != s.data() + s.size()) return false;
+    if(result.ptr != (s.data() + (s.size()-suffix_size))) return false;
 
     return true;
 }

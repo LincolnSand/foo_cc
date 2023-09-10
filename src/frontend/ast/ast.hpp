@@ -149,15 +149,10 @@ struct function_definition_t {
 using global_variable_declaration_t = declaration_t;
 using type_table_t = std::array<std::unordered_map<type_name_t, type_t>, NUMBER_OF_TYPE_CATEGORIES>;
 
-struct validated_global_variable_definition_t {
-    type_t type_name;
-    var_name_t var_name;
-    constant_t value; // is set to `0` if the variable is declared, but not defined in `program_t`
-};
 struct validated_program_t {
     type_table_t type_table;
 
-    std::vector<std::variant<function_definition_t, validated_global_variable_definition_t>> top_level_declarations; // guaranteed to be deduplicated
+    std::vector<std::variant<function_definition_t, global_variable_declaration_t>> top_level_declarations; // guaranteed to be deduplicated
 };
 }
 

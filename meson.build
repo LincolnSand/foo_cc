@@ -37,7 +37,8 @@ exe = executable('foo_cc',
 
 
 tests_src = [
-    'tests/test1.cpp'
+    'tests/compile_time/variant_adapter.cpp',
+    'tests/runtime/utils_common_test.cpp'
 ]
 
 tests_inc = [

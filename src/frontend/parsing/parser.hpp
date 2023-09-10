@@ -9,6 +9,7 @@
 #include <memory>
 #include <cstddef>
 #include <cassert>
+#include <unordered_set>
 
 #include <frontend/lexing/lexer.hpp>
 #include <frontend/ast/ast.hpp>

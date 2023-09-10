@@ -1519,23 +1519,36 @@ ast::validated_program_t parse(parser_t& parser) {
         }, top_level_decl);
     }
 
-    ast::validated_program_t validated_program{};
-    validated_program.type_table = parser.symbol_info.type_table;
+    std::unordered_set<ast::var_name_t> global_variable_declarations;
+    std::vector<std::variant<ast::function_definition_t, ast::global_variable_declaration_t>> deduplicated_top_level_declarations;
     for(const auto& top_level_decl : top_level_declarations) {
         std::visit(overloaded{
-            [&validated_program](const ast::function_definition_t& function_def) {
-                validated_program.top_level_declarations.push_back(function_def);
-            }, 
-            [&validated_program](const ast::global_variable_declaration_t& global_variable) {
-                if(global_variable.value.has_value()) {
-                    ast::validated_global_variable_definition_t validated_definition{global_variable.type_name, global_variable.var_name, evaluate_expression(global_variable.value.value())};
-                    validated_program.top_level_declarations.push_back(validated_definition);
+            // We can't instead use `auto&` below because of stupid C++ template nonsense where it gets confused thinking the param still might be `ast::type_t` even though it *never* can be.
+            [&deduplicated_top_level_declarations](const ast::function_definition_t& function_def) {
+                std::variant<ast::function_definition_t, ast::global_variable_declaration_t> top_level_decl = function_def;
+                deduplicated_top_level_declarations.push_back(top_level_decl);
+            },
+            [&global_variable_declarations, &parser, &deduplicated_top_level_declarations](const ast::global_variable_declaration_t& global_var) {
+                if(global_var.value.has_value()) {
+                    if(utils::contains(parser.symbol_info.global_variable_definitions, global_var.var_name)) {
+                        std::variant<ast::function_definition_t, ast::global_variable_declaration_t> top_level_decl = global_var;
+                        deduplicated_top_level_declarations.push_back(top_level_decl);
+                    } else {
+                        throw std::logic_error("Global variable definition isn't in global variable definition table.");
+                    }
                 } else {
-                    ast::validated_global_variable_definition_t validated_definition{global_variable.type_name, global_variable.var_name, ast::constant_t{0}};
-                    validated_program.top_level_declarations.push_back(validated_definition);
+                    if(!utils::contains(parser.symbol_info.global_variable_definitions, global_var.var_name) && global_variable_declarations.count(global_var.var_name) == 0) {
+                        global_variable_declarations.insert(global_var.var_name);
+                        std::variant<ast::function_definition_t, ast::global_variable_declaration_t> top_level_decl = global_var;
+                        deduplicated_top_level_declarations.push_back(top_level_decl);
+                    }
                 }
             },
         }, top_level_decl);
     }
+
+    ast::validated_program_t validated_program{};
+    validated_program.type_table = parser.symbol_info.type_table;
+    validated_program.top_level_declarations = std::move(deduplicated_top_level_declarations);
     return validated_program;
 }

@@ -15,5 +15,5 @@ void print_compound_statement(bool has_types, const ast::compound_statement_t& d
 void print_function_decl(const ast::function_declaration_t& func_decl);
 void print_function_definition(bool has_types, const ast::function_definition_t& function_definition);
 
-void print_validated_global_variable_definition(const ast::validated_global_variable_definition_t& global_var_def);
+void print_global_variable_definition(const ast::global_variable_declaration_t& global_var_def);
 void print_validated_ast(const ast::validated_program_t& validated_program);

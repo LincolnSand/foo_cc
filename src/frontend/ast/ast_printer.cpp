@@ -224,13 +224,15 @@ void print_function_definition(const bool has_types, const ast::function_definit
     std::cout << ")\n";
 }
 
-void print_validated_global_variable_definition(const ast::validated_global_variable_definition_t& global_var_def) {
+void print_global_variable_definition(const ast::global_variable_declaration_t& global_var_def) {
     std::cout << "(global_var: ";
     std::cout << global_var_def.type_name.type_name;
     std::cout << ' ';
     std::cout << global_var_def.var_name;
-    std::cout << " = ";
-    print_expression(true, ast::expression_t{global_var_def.value, global_var_def.type_name});
+    if(global_var_def.value.has_value()) {
+        std::cout << " = ";
+        print_expression(true, ast::expression_t{global_var_def.value.value()});
+    }
     std::cout << ')';
     std::cout << '\n';
 }
@@ -240,8 +242,8 @@ void print_validated_ast(const ast::validated_program_t& validated_program) {
             [](const ast::function_definition_t& function_def) {
                 print_function_definition(true, function_def);
             },
-            [](const ast::validated_global_variable_definition_t& global_var_def) {
-                print_validated_global_variable_definition(global_var_def);
+            [](const ast::global_variable_declaration_t& global_var_def) {
+                print_global_variable_definition(global_var_def);
             }
         }, e);
     }
