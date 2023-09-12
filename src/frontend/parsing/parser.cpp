@@ -1194,7 +1194,7 @@ ast::function_declaration_t parse_function_declaration(parser_t& parser, ast::ty
     auto function_declaration = ast::function_declaration_t{ type, ast::func_name_t(name_token.token_text), parse_function_declaration_parameter_list(param_list) };
 
     if(utils::contains(parser.symbol_info.global_variable_declarations, function_declaration.function_name) || utils::contains(parser.symbol_info.global_variable_definitions, function_declaration.function_name)) {
-        throw "Function [" + function_declaration.function_name + "] is already declared as a global variable.";
+        throw std::runtime_error("Function [" + function_declaration.function_name + "] is already declared as a global variable.");
     }
 
     if(utils::contains(parser.symbol_info.function_definitions_lookup, function_declaration.function_name)) {

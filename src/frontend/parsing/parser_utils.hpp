@@ -41,6 +41,9 @@ struct parser_t {
     }
 
     token_t peek_token() const {
+        if(is_eof()) {
+            return token_t{token_type_t::EOF_TOK, "", 0}; // TODO: Put in an actual line number instead of just `0`
+        }
         return tokens.at(current_token_index);
     }
     // `peek_token()` == `peek_token(0)`
@@ -73,6 +76,9 @@ struct parser_t {
     }
 
     token_t advance_token() {
+        if(is_eof()) {
+            return token_t{token_type_t::EOF_TOK, "", 0}; // TODO: Put in an actual line number instead of just `0`
+        }
         return tokens.at(current_token_index++);
     }
     // `advance_token()` == `advance_token_n(1)`
