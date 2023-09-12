@@ -115,6 +115,8 @@ struct lexer_t {
     }
 
     char advance_char() {
+        if(is_eof()) return '\0';
+
         return *(current++);
     }
     // `advance_char()` == `advance_char_n(1)`

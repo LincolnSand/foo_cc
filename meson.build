@@ -8,11 +8,17 @@ add_global_arguments('-Wextra', language : 'cpp')
 add_global_arguments('-fsanitize=address', language : 'cpp')
 add_global_arguments('--coverage', language : 'cpp')
 add_global_arguments('-g', language : 'cpp')
+add_global_arguments('-g', language : 'c')
+add_global_arguments('-ggdb', language : 'cpp')
+add_global_arguments('-ggdb', language : 'c')
 
 
-inc = [include_directories('src')]
+
+inc = [include_directories('src')] + [include_directories('debug')]
 
 project_source_files = [
+    'debug/exception_stack_trace.cpp',
+
     'src/io/file_io.cpp',
     'src/frontend/lexing/lexer.cpp',
     'src/frontend/parsing/parser_utils.cpp',
@@ -23,6 +29,8 @@ project_source_files = [
 ]
 
 link_arguments = [
+    #'-rdynamic',
+
     '-fsanitize=address',
     '-static-libasan',
     '--coverage'

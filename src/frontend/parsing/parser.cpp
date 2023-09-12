@@ -857,7 +857,7 @@ ast::type_t parse_and_validate_typedef_struct_body(parser_t& parser, const ast::
         std::vector<std::string> field_names_in_line;
         auto field_name = parser.advance_token();
         if(field_name.token_type != token_type_t::IDENTIFIER) {
-            throw std::logic_error("Expected identifier name in struct definition for field.");
+            throw std::runtime_error("Expected identifier name in struct definition for field.");
         }
         field_names_in_line.push_back(std::string(field_name.token_text));
 
@@ -865,7 +865,7 @@ ast::type_t parse_and_validate_typedef_struct_body(parser_t& parser, const ast::
             parser.advance_token();
             field_name = parser.advance_token();
             if(field_name.token_type != token_type_t::IDENTIFIER) {
-                throw std::logic_error("Expected identifier name in struct definition for field.");
+                throw std::runtime_error("Expected identifier name in struct definition for field.");
             }
             field_names_in_line.push_back(std::string(field_name.token_text));
         }
@@ -895,7 +895,7 @@ ast::type_t parse_and_validate_anonymous_typedef_struct_definition(parser_t& par
         std::vector<std::string> field_names_in_line;
         auto field_name = parser.advance_token();
         if(field_name.token_type != token_type_t::IDENTIFIER) {
-            throw std::logic_error("Expected identifier name in struct definition for field.");
+            throw std::runtime_error("Expected identifier name in struct definition for field.");
         }
         field_names_in_line.push_back(std::string(field_name.token_text));
 
@@ -903,7 +903,7 @@ ast::type_t parse_and_validate_anonymous_typedef_struct_definition(parser_t& par
             parser.advance_token();
             field_name = parser.advance_token();
             if(field_name.token_type != token_type_t::IDENTIFIER) {
-                throw std::logic_error("Expected identifier name in struct definition for field.");
+                throw std::runtime_error("Expected identifier name in struct definition for field.");
             }
             field_names_in_line.push_back(std::string(field_name.token_text));
         }
@@ -994,7 +994,7 @@ ast::type_t parse_typedef_struct_decl_or_def(parser_t& parser) {
     } else if(name_token.token_type == token_type_t::IDENTIFIER) {
         return parse_and_validate_anonymous_typedef_struct_definition(parser);
     } else {
-        throw std::logic_error("Expected identifier name in struct declaration/definition.");
+        throw std::runtime_error("Expected identifier name in struct declaration/definition.");
     }
 }
 
@@ -1175,7 +1175,7 @@ static std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>> parse
         } else if(parser.peek_token().token_type == token_type_t::RIGHT_PAREN) {
             break;
         } else {
-            throw std::logic_error("Unexpected token in function definition parameter list."); // should be impossible to trigger
+            throw std::runtime_error("Unexpected token in function definition parameter list."); // should be impossible to trigger
         }
     }
     return param_list;
@@ -1299,7 +1299,7 @@ std::variant<ast::function_declaration_t, ast::function_definition_t, ast::globa
 
     const auto name_token = parser.advance_token();
     if(name_token.token_type != token_type_t::IDENTIFIER) {
-        throw std::logic_error("Expected a identifier name in function or global variable declaration/definition.");
+        throw std::runtime_error("Expected an identifier name in function or global variable declaration/definition.");
     }
 
     const auto next_token = parser.peek_token();
@@ -1325,7 +1325,7 @@ ast::type_t parse_and_validate_struct_body(parser_t& parser, const ast::type_nam
         std::vector<std::string> field_names_in_line;
         auto field_name = parser.advance_token();
         if(field_name.token_type != token_type_t::IDENTIFIER) {
-            throw std::logic_error("Expected identifier name in struct definition for field.");
+            throw std::runtime_error("Expected identifier name in struct definition for field.");
         }
         field_names_in_line.push_back(std::string(field_name.token_text));
 
@@ -1333,7 +1333,7 @@ ast::type_t parse_and_validate_struct_body(parser_t& parser, const ast::type_nam
             parser.advance_token();
             field_name = parser.advance_token();
             if(field_name.token_type != token_type_t::IDENTIFIER) {
-                throw std::logic_error("Expected identifier name in struct definition for field.");
+                throw std::runtime_error("Expected identifier name in struct definition for field.");
             }
             field_names_in_line.push_back(std::string(field_name.token_text));
         }
@@ -1356,7 +1356,7 @@ ast::type_t parse_struct(parser_t& parser) {
 
     const auto name_token = parser.advance_token();
     if(name_token.token_type != token_type_t::IDENTIFIER) {
-        throw std::logic_error("Expected identifier name in struct declaration/definition.");
+        throw std::runtime_error("Expected identifier name in struct declaration/definition.");
     }
     auto name = ast::type_name_t(name_token.token_text);
 

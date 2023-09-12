@@ -1,5 +1,14 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#ifndef __USE_GNU
+#define __USE_GNU
+#endif
+
+
 #include <iostream>
 #include <cstring>
+#include <stdexcept>
 
 #include <io/file_io.hpp>
 #include <frontend/lexing/lexer.hpp>
@@ -7,6 +16,8 @@
 #include <frontend/ast/ast_printer.hpp>
 //#include <middle_end/typing/type_checker.hpp>
 //#include <backend/x86_64/traverse_ast.hpp>
+
+#include <exception_stack_trace.hpp>
 
 
 int main(int argc, char** argv) {
@@ -25,13 +36,19 @@ int main(int argc, char** argv) {
     if(argc > 1) {
         std::string file_contents = read_file_into_string(argv[1]);
 
-        lexer_t lexer(file_contents.c_str());
-        std::vector<token_t> tokens_list = scan_all_tokens(lexer);
+        try {
+            lexer_t lexer(file_contents.c_str());
+            std::vector<token_t> tokens_list = scan_all_tokens(lexer);
 
-        parser_t parser(tokens_list);
-        ast::validated_program_t ast = parse(parser);
+            parser_t parser(tokens_list);
+            ast::validated_program_t ast = parse(parser);
 
-        print_validated_ast(ast);
+            print_validated_ast(ast);
+        } catch(const std::runtime_error &e) {
+            // Temporary while we are fuzzing.
+            // TODO: Implement proper error handling for compile errors.
+            return 0;
+        }
 
         //type_check(ast); // mutates `valid_ast`
 
