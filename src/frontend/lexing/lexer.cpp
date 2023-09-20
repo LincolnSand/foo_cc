@@ -43,14 +43,16 @@ token_type_t handle_floating_literal_suffix(lexer_t& lexer) {
     }
     return token_type_t::DOUBLE_CONSTANT;
 }
-token_type_t handle_number(lexer_t& lexer) {
-    while(utils::is_digit(lexer.peek_char())) {
+token_type_t handle_number(lexer_t& lexer, const bool has_leading_number) {
+    if(has_leading_number) {
+        while(utils::is_digit(lexer.peek_char())) {
+            lexer.advance_char();
+        }
+        if(lexer.peek_char() != '.') {
+            return handle_integer_literal_suffix(lexer);
+        }
         lexer.advance_char();
     }
-    if(lexer.peek_char() != '.') {
-        return handle_integer_literal_suffix(lexer);
-    }
-    lexer.advance_char();
     while(utils::is_digit(lexer.peek_char())) {
         lexer.advance_char();
     }
@@ -227,6 +229,10 @@ token_t scan_token(lexer_t& lexer) {
 
     if(utils::is_digit(c)) {
         return lexer.make_token(handle_number(lexer));
+    }
+    // We allow doubles that are of the form `.768` (i.e. no leading number)
+    if(c == '.' && utils::is_digit(lexer.peek_char())) {
+        return lexer.make_token(handle_number(lexer, false));
     }
     if(utils::is_alpha(c)) { // identifier cannot start with number
         return lexer.make_token(handle_identifier(lexer));

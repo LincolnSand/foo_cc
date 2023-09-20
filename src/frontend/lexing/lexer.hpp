@@ -149,7 +149,7 @@ struct lexer_t {
 };
 
 
-token_type_t handle_number(lexer_t& lexer);
+token_type_t handle_number(lexer_t& lexer, bool has_leading_number = true);
 token_type_t handle_identifier(lexer_t& lexer);
 token_type_t handle_char(lexer_t& lexer);
 token_type_t handle_keywords(lexer_t& lexer);
