@@ -517,7 +517,7 @@ void type_check(ast::validated_program_t& validated_program) {
             [](ast::function_definition_t& function_definition) {
                 type_check_function_definition(function_definition);
             },
-            [](ast::validated_global_variable_definition_t& global_var_def) {
+            [](ast::global_variable_declaration_t& global_var_def) {
                 // TODO: move compile time evaluation of global variables to here from `validate_ast.cpp`
             }
         }, e);

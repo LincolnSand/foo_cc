@@ -97,6 +97,7 @@ void print_expression(const bool has_types, const ast::expression_t& expr) {
                     std::cout << ", ";
                 }
             }
+            std::cout << ')';
         },
         [](const ast::constant_t& constant) -> void {
             std::cout << "(constant: ";
@@ -132,15 +133,17 @@ void print_return_statement(const bool has_types, const ast::return_statement_t&
 }
 void print_if_statement(const bool has_types, const ast::if_statement_t& if_statement) {
     std::cout << "(if: ";
+    std::cout << "(condition: ";
     print_expression(has_types, if_statement.if_exp);
-    print_statement(has_types, if_statement.if_body);
+    std::cout << ")";
+    print_statement(has_types, if_statement.if_body, true);
     if(if_statement.else_body.has_value()) {
         std::cout << " else ";
-        print_statement(has_types, if_statement.else_body.value());
+        print_statement(has_types, if_statement.else_body.value(), true);
     }
     std::cout << ')';
 }
-void print_statement(const bool has_types, const ast::statement_t& stmt, const bool is_last_statement) {
+void print_statement(const bool has_types, const ast::statement_t& stmt, const bool is_nested, const bool is_last_statement) {
     std::visit(overloaded{
         [has_types, is_last_statement](const ast::return_statement_t& stmt) {
             print_return_statement(has_types, stmt);
@@ -156,14 +159,14 @@ void print_statement(const bool has_types, const ast::statement_t& stmt, const b
                 }
             }
         },
-        [has_types, is_last_statement](const std::shared_ptr<ast::if_statement_t>& stmt) {
+        [has_types, is_last_statement, is_nested](const std::shared_ptr<ast::if_statement_t>& stmt) {
             print_if_statement(has_types, *stmt);
-            if(!is_last_statement) {
+            if(!is_last_statement || is_nested) {
                 std::cout << '\n';
             }
         },
         [has_types](const std::shared_ptr<ast::compound_statement_t>& stmt) {
-            print_compound_statement(has_types, *stmt);
+            print_compound_statement(has_types, *stmt, true);
         }
     }, stmt);
 }
@@ -182,12 +185,12 @@ void print_declaration(const bool has_types, const ast::declaration_t& declarati
         std::cout << '\n';
     }
 }
-void print_compound_statement(const bool has_types, const ast::compound_statement_t& declaration_statement) {
+void print_compound_statement(const bool has_types, const ast::compound_statement_t& declaration_statement, const bool is_nested) {
     for(auto i = 0; i < declaration_statement.stmts.size(); ++i) {
-        const bool is_last_stmt = (i == declaration_statement.stmts.size() - 1);
+        const bool is_last_stmt = (i == (declaration_statement.stmts.size() - 1));
         std::visit(overloaded{
-            [has_types, is_last_stmt](const ast::statement_t& stmt) {
-                print_statement(has_types, stmt, is_last_stmt);
+            [has_types, is_last_stmt, is_nested](const ast::statement_t& stmt) {
+                print_statement(has_types, stmt, is_nested, is_last_stmt);
             },
             [has_types, is_last_stmt](const ast::declaration_t& declaration) {
                 print_declaration(has_types, declaration, is_last_stmt);
@@ -220,7 +223,7 @@ void print_function_definition(const bool has_types, const ast::function_definit
     if(function_definition.statements.stmts.size() > 0) {
         std::cout << '\n';
     }
-    print_compound_statement(has_types, function_definition.statements);
+    print_compound_statement(has_types, function_definition.statements, false);
     std::cout << ")\n";
 }
 

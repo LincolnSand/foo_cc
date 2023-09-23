@@ -10,7 +10,6 @@ void validate_type_name(const ast::type_t& expected, const ast::type_t& actual, 
 }
 
 
-
 // TODO: refactor and double check the implementation
 void validate_compile_time_expression(validation_t& validation, const ast::expression_t& expression) {
     std::visit(overloaded{
@@ -228,15 +227,7 @@ static ast::type_name_t primitive_token_keyword_to_name(token_type_t token_type)
     throw std::runtime_error("Not a primitive type keyword.");
 }
 
-#if 0
-ast::type_t create_type_from_token(const token_t& token) {
-    std::string type_name = get_type_name_from_token(token);
-    const std::size_t type_size = get_size_from_type(type_name);
-    const std::size_t alignment_size = get_alignment_from_type(type_name);
-    return make_primitive_type_t(get_type_category_from_token_type(token.token_type), std::move(type_name), type_size, alignment_size);
-}
-#endif
-bool has_return_statement(const ast::compound_statement_t& compound_stmt) {
+static bool has_return_statement(const ast::compound_statement_t& compound_stmt) {
     for(const auto& stmt : compound_stmt.stmts) {
         if(is_return_statement(stmt)) {
             return true;
@@ -285,6 +276,80 @@ static ast::expression_t parse_double_constant(parser_t& parser) {
 }
 static ast::expression_t parse_long_double_constant(parser_t& parser) {
     return ast::expression_t { parse_constant<long double>(parser, 1), make_primitive_type_t(ast::type_category_t::FLOATING, "long double", sizeof(long double), alignof(long double)) };
+}
+
+static ast::type_t get_function_return_type(parser_t& parser, const ast::func_name_t& function_name) {
+    if(utils::contains(parser.symbol_info.function_declarations_lookup, function_name)) {
+        return parser.symbol_info.function_declarations_lookup.at(function_name).return_type;
+    } else if(utils::contains(parser.symbol_info.function_definitions_lookup, function_name)) {
+        return parser.symbol_info.function_definitions_lookup.at(function_name).return_type;
+    } else {
+        throw std::logic_error("Function [" + function_name + "] not declared or defined.");
+    }
+}
+
+static std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>> parse_function_definition_parameter_list(parser_t& parser) {
+    std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>> param_list;
+    for(;;) {
+        std::vector<token_t> current_param;
+        while(parser.peek_token().token_type != token_type_t::COMMA && parser.peek_token().token_type != token_type_t::RIGHT_PAREN) {
+            if(parser.is_eof()) {
+                throw std::runtime_error("Unexpected end of file.");
+            }
+            current_param.push_back(parser.advance_token());
+        }
+
+        if(param_list.size() != 0 && current_param.size() == 0) {
+            throw std::runtime_error("You have a trailing comma in your parameter list.");
+        }
+
+        if(current_param.size() == 0) {
+            break; // empty param list. e.g. `int main();`
+        } else if(current_param.size() == 1) {
+            if(!is_a_type_token(parser, current_param[0])) {
+                throw std::runtime_error("Expected identifier name (type name) in function declaration.");
+            }
+            param_list.push_back({parse_type_name_from_token(parser, current_param[0]), std::nullopt});
+        } else if(current_param.size() == 2) {
+            if(is_struct_keyword(current_param[0])) {
+                param_list.push_back({parse_struct_name_from_token(parser, current_param[0]), std::nullopt});
+            } else {
+                if(!is_a_type_token(parser, current_param[0])) {
+                    throw std::runtime_error("Expected identifier name (type name) in function declaration.");
+                }
+                if(current_param[1].token_type != token_type_t::IDENTIFIER) {
+                    throw std::runtime_error("Expected identifier name (variable name) in function declaration.");
+                }
+                param_list.push_back({parse_type_name_from_token(parser, current_param[0]), std::make_optional(ast::var_name_t{current_param[1].token_text})});
+            }
+        } else if(current_param.size() == 3) {
+            if(!is_struct_keyword(current_param[0])) {
+                throw std::runtime_error("Expected `struct` keyword in parameter list.");
+            }
+            if(current_param[2].token_type != token_type_t::IDENTIFIER) {
+                throw std::runtime_error("Expected identifier name (variable name) in function declaration.");
+            }
+            param_list.push_back({parse_struct_name_from_token(parser, current_param[1]), std::make_optional(ast::var_name_t{current_param[2].token_text})});
+        } else {
+            throw std::runtime_error("Unexpected token in function definition parameter list.");
+        }
+
+        if(parser.peek_token().token_type == token_type_t::COMMA) {
+            parser.advance_token(); // consume `,`
+        } else if(parser.peek_token().token_type == token_type_t::RIGHT_PAREN) {
+            break;
+        } else {
+            throw std::runtime_error("Unexpected token in function definition parameter list."); // should be impossible to trigger
+        }
+    }
+    return param_list;
+}
+static std::vector<ast::type_t> parse_function_declaration_parameter_list(std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>> list_with_names) {
+    std::vector<ast::type_t> ret_type_list;
+    for(const auto& param : list_with_names) {
+        ret_type_list.push_back(std::move(param.first));
+    }
+    return ret_type_list;
 }
 
 std::shared_ptr<ast::grouping_t> parse_grouping(parser_t& parser) {
@@ -383,22 +448,22 @@ std::shared_ptr<ast::function_call_t> parse_and_validate_function_call(parser_t&
 
     return std::make_shared<ast::function_call_t>(std::move(function_call));
 }
-std::variant<ast::var_name_t, std::shared_ptr<ast::function_call_t>> parse_and_validate_variable_or_function_call(parser_t& parser) {
+ast::expression_t parse_and_validate_variable_or_function_call(parser_t& parser) {
     auto name_token = parser.advance_token();
     if(name_token.token_type != token_type_t::IDENTIFIER) {
         throw std::runtime_error("Invalid identifier: [" + std::to_string(static_cast<std::uint32_t>(name_token.token_type)) + std::string("]"));
     }
 
     if(parser.peek_token().token_type == token_type_t::LEFT_PAREN) {
-        return parse_and_validate_function_call(parser, name_token);
+        return {parse_and_validate_function_call(parser, name_token), get_function_return_type(parser, ast::func_name_t(name_token.token_text))};
     } else {
-        return parse_and_validate_variable(parser, name_token);
+        return {parse_and_validate_variable(parser, name_token), parser.symbol_info.variable_lookup.find_in_accessible_scopes(ast::var_name_t(name_token.token_text))};
     }
 }
 ast::expression_t parse_prefix_expression(parser_t& parser) {
     switch(parser.peek_token().token_type) {
         case token_type_t::IDENTIFIER:
-            return {utils::variant_adapter<ast::expression_exp_type_t>(parse_and_validate_variable_or_function_call(parser)), std::nullopt};
+            return parse_and_validate_variable_or_function_call(parser);
         case token_type_t::CHAR_CONSTANT:
             return parse_char_constant(parser);
         case token_type_t::INT_CONSTANT:
@@ -665,7 +730,6 @@ ast::expression_t parse_and_validate_expression(parser_t& parser, const ast::pre
         }
 
         if(parser.peek_token().token_type == token_type_t::QUESTION_MARK) {
-            // TODO: double check that the associativity and precedence are correct for ternary expressions
             auto [r_bp, l_bp] = ternary_binding_power();
             if(l_bp < precedence) {
                 break;
@@ -1124,69 +1188,6 @@ ast::compound_statement_t parse_and_validate_compound_statement(parser_t& parser
 
     return ret;
 }
-static std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>> parse_function_definition_parameter_list(parser_t& parser) {
-    std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>> param_list;
-    for(;;) {
-        std::vector<token_t> current_param;
-        while(parser.peek_token().token_type != token_type_t::COMMA && parser.peek_token().token_type != token_type_t::RIGHT_PAREN) {
-            if(parser.is_eof()) {
-                throw std::runtime_error("Unexpected end of file.");
-            }
-            current_param.push_back(parser.advance_token());
-        }
-
-        if(param_list.size() != 0 && current_param.size() == 0) {
-            throw std::runtime_error("You have a trailing comma in your parameter list.");
-        }
-
-        if(current_param.size() == 0) {
-            break; // empty param list. e.g. `int main();`
-        } else if(current_param.size() == 1) {
-            if(!is_a_type_token(parser, current_param[0])) {
-                throw std::runtime_error("Expected identifier name (type name) in function declaration.");
-            }
-            param_list.push_back({parse_type_name_from_token(parser, current_param[0]), std::nullopt});
-        } else if(current_param.size() == 2) {
-            if(is_struct_keyword(current_param[0])) {
-                param_list.push_back({parse_struct_name_from_token(parser, current_param[0]), std::nullopt});
-            } else {
-                if(!is_a_type_token(parser, current_param[0])) {
-                    throw std::runtime_error("Expected identifier name (type name) in function declaration.");
-                }
-                if(current_param[1].token_type != token_type_t::IDENTIFIER) {
-                    throw std::runtime_error("Expected identifier name (variable name) in function declaration.");
-                }
-                param_list.push_back({parse_type_name_from_token(parser, current_param[0]), std::make_optional(ast::var_name_t{current_param[1].token_text})});
-            }
-        } else if(current_param.size() == 3) {
-            if(!is_struct_keyword(current_param[0])) {
-                throw std::runtime_error("Expected `struct` keyword in parameter list.");
-            }
-            if(current_param[2].token_type != token_type_t::IDENTIFIER) {
-                throw std::runtime_error("Expected identifier name (variable name) in function declaration.");
-            }
-            param_list.push_back({parse_struct_name_from_token(parser, current_param[1]), std::make_optional(ast::var_name_t{current_param[2].token_text})});
-        } else {
-            throw std::runtime_error("Unexpected token in function definition parameter list.");
-        }
-
-        if(parser.peek_token().token_type == token_type_t::COMMA) {
-            parser.advance_token(); // consume `,`
-        } else if(parser.peek_token().token_type == token_type_t::RIGHT_PAREN) {
-            break;
-        } else {
-            throw std::runtime_error("Unexpected token in function definition parameter list."); // should be impossible to trigger
-        }
-    }
-    return param_list;
-}
-static std::vector<ast::type_t> parse_function_declaration_parameter_list(std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>> list_with_names) {
-    std::vector<ast::type_t> ret_type_list;
-    for(const auto& param : list_with_names) {
-        ret_type_list.push_back(std::move(param.first));
-    }
-    return ret_type_list;
-}
 ast::function_declaration_t parse_function_declaration(parser_t& parser, ast::type_t type, const token_t name_token, std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>>&& param_list) {
     parser.expect_token(token_type_t::SEMICOLON, "Expected `;` in function declaration.");
 
@@ -1391,8 +1392,7 @@ ast::type_t parse_typedef(parser_t& parser) {
     auto& typedef_symbol_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::TYPEDEF));
 
     if(is_struct_keyword(parser.peek_token())) {
-        // TODO: change to `auto` once these functions are implemented/declared
-        ast::type_t struct_decl_or_def = parse_typedef_struct_decl_or_def(parser);
+        auto struct_decl_or_def = parse_typedef_struct_decl_or_def(parser);
 
         assert(struct_decl_or_def.type_category == ast::type_category_t::STRUCT);
 

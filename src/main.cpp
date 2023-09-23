@@ -14,7 +14,7 @@
 #include <frontend/lexing/lexer.hpp>
 #include <frontend/parsing/parser.hpp>
 #include <frontend/ast/ast_printer.hpp>
-//#include <middle_end/typing/type_checker.hpp>
+#include <middle_end/typing/type_checker.hpp>
 //#include <backend/x86_64/traverse_ast.hpp>
 
 #include <exception_stack_trace.hpp>
@@ -42,6 +42,8 @@ int main(int argc, char** argv) {
 
             parser_t parser(tokens_list);
             ast::validated_program_t ast = parse(parser);
+
+            type_check(ast);
 
             print_validated_ast(ast);
         } catch(const std::runtime_error &e) {

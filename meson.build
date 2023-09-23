@@ -24,7 +24,9 @@ project_source_files = [
     'src/frontend/parsing/parser_utils.cpp',
     'src/frontend/parsing/parser.cpp',
     'src/middle_end/typing/generate_typing.cpp',
+    'src/middle_end/typing/type_checker.cpp',
     'src/backend/interpreter/compile_time_evaluator.cpp',
+
     'src/frontend/ast/ast_printer.cpp'
 ]
 
