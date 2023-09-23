@@ -3,12 +3,12 @@ struct foo {
     float t;
 };
 
-//typedef struct foo foo_t;
+typedef struct foo foo_t;
 
 int main() {
-    //foo_t f;
-    //struct foo f;
-    struct foo_t f;
+    foo_t f1;
+    struct foo f2;
+    //struct foo_t f;
 
     int v = 7;
     if(v) {

@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
 
             //type_check(ast);
 
-            //print_validated_ast(ast);
+            print_validated_ast(ast);
         //} catch(const std::runtime_error &e) {
             // Temporary while we are fuzzing.
             // TODO: Implement proper error handling for compile errors.
