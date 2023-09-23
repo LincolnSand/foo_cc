@@ -73,7 +73,9 @@ static bool is_keyword_a_type(token_type_t token_type) {
     }
     return false;
 }
-static bool is_return_statement(const std::variant<ast::statement_t, ast::declaration_t>& stmt) {
+
+// declared in frontend/ast/ast.hpp
+bool is_return_statement(const std::variant<ast::statement_t, ast::declaration_t>& stmt) {
     return std::visit(overloaded{
         [](const ast::statement_t& stmt) {
             return std::visit(overloaded{
@@ -90,7 +92,16 @@ static bool is_return_statement(const std::variant<ast::statement_t, ast::declar
         }
     }, stmt);
 }
-// declared in frontend/ast/ast.hpp
+bool has_return_statement(const ast::compound_statement_t& compound_stmt) {
+    for(const auto& stmt : compound_stmt.stmts) {
+        if(is_return_statement(stmt)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
 static ast::type_category_t get_type_category_from_token_type(token_type_t token_type) {
     switch(token_type) {
         case token_type_t::CHAR_CONSTANT:
@@ -225,15 +236,6 @@ static ast::type_name_t primitive_token_keyword_to_name(token_type_t token_type)
             return "long double";
     }
     throw std::runtime_error("Not a primitive type keyword.");
-}
-
-static bool has_return_statement(const ast::compound_statement_t& compound_stmt) {
-    for(const auto& stmt : compound_stmt.stmts) {
-        if(is_return_statement(stmt)) {
-            return true;
-        }
-    }
-    return false;
 }
 
 template<typename T>
