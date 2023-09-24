@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
             parser_t parser(tokens_list);
             ast::validated_program_t ast = parse(parser);
 
-            //type_check(ast);
+            type_check(ast); // mutates `valid_ast`
 
             print_validated_ast(ast);
         //} catch(const std::runtime_error &e) {
@@ -51,8 +51,6 @@ int main(int argc, char** argv) {
             // TODO: Implement proper error handling for compile errors.
             //return 0;
         //}
-
-        //type_check(ast); // mutates `valid_ast`
 
         //std::string assembly_output = generate_asm(ast);
 

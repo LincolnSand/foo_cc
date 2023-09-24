@@ -12,6 +12,8 @@ int main() {
     struct foo f3;
     //struct foo_t f;
 
+    f2;
+
     int v = 7;
     if(v) {
         double ll = 0.7f;

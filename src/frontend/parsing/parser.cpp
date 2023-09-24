@@ -782,21 +782,6 @@ void add_unsigned_integer_types_to_type_table(parser_t& parser) {
     unsigned_integer_symbol_table.insert({"unsigned long long", make_primitive_type(token_type_t::UNSIGNED_LONG_LONG_KEYWORD)});
 }
 
-bool is_potential_type(parser_t& parser) {
-    if(is_struct_keyword(parser.peek_token())) {
-        if(parser.peek_token_n(1).token_type == token_type_t::IDENTIFIER) {
-            return true;
-        }
-        return false;
-    }
-    if(is_keyword_a_type(parser.peek_token().token_type)) {
-        return true;
-    }
-    if(parser.peek_token().token_type == token_type_t::IDENTIFIER) {
-        return true;
-    }
-    return false;
-}
 bool is_a_type(const parser_t& parser) {
     if(is_struct_keyword(parser.peek_token())) {
         const auto identifier_token = parser.peek_token_n(1);
@@ -1215,7 +1200,7 @@ ast::compound_statement_t parse_and_validate_compound_statement(parser_t& parser
             throw std::runtime_error("Unexpected end of file. Unterminated compound statement.");
         }
 
-        if(is_potential_type(parser)) {
+        if(is_a_type(parser)) {
             ret.stmts.push_back(parse_and_validate_declaration(parser));
         } else {
             ret.stmts.push_back(parse_and_validate_statement(parser));
