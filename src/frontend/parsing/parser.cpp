@@ -1039,7 +1039,16 @@ ast::type_t parse_and_validate_type(parser_t& parser) {
             throw std::runtime_error("Type not found.");
         }
 
+        auto actual_type_alias_iter = type_iter;
+
         if(!type_iter->second.size.has_value()) {
+            while(type_iter->second.aliased_type_category.value() == ast::type_category_t::TYPEDEF) {
+                type_iter = type_table.find(type_iter->second.aliased_type.value());
+                if(type_iter == std::end(type_table)) {
+                    throw std::runtime_error("Type not found.");
+                }
+            }
+
             if(type_iter->second.aliased_type_category.value() != ast::type_category_t::STRUCT) {
                 throw std::logic_error("Expected struct for undefined type size in typedef.");
             }
@@ -1054,7 +1063,7 @@ ast::type_t parse_and_validate_type(parser_t& parser) {
             }
         }
 
-        return type_iter->second;
+        return actual_type_alias_iter->second;
     }
 }
 ast::type_t parse_typedef_struct_decl_or_def(parser_t& parser) {
