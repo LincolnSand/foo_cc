@@ -9,6 +9,19 @@ void validate_type_name(const ast::type_t& expected, const ast::type_t& actual, 
     }
 }
 
+ast::type_t get_type_of_variable(const validation_t& validation, const ast::var_name_t& variable_name) {
+    if(validation.variable_lookup.contains_in_accessible_scopes(variable_name)) {
+        return validation.variable_lookup.find_in_accessible_scopes(variable_name);
+    }
+    if(utils::contains(validation.global_variable_declarations, variable_name)) {
+        return validation.global_variable_declarations.at(variable_name).type_name;
+    }
+    if(utils::contains(validation.global_variable_definitions, variable_name)) {
+        return validation.global_variable_definitions.at(variable_name).type_name;
+    }
+    throw std::logic_error("Variable [" + variable_name + "] is not declared.");
+}
+
 
 // TODO: refactor and double check the implementation
 void validate_compile_time_expression(validation_t& validation, const ast::expression_t& expression) {
@@ -49,7 +62,6 @@ void validate_compile_time_expression(validation_t& validation, const ast::expre
         }
     }, expression.expr);
 }
-
 
 
 // TODO: maybe pull out and make globally accessible
@@ -457,7 +469,7 @@ ast::type_t get_aliased_type(parser_t& parser, const ast::type_t type) {
 
 ast::expression_t parse_and_validate_member_access(parser_t& parser, const token_t name_token) {
     ast::var_name_t name = ast::var_name_t { name_token.token_text };
-    ast::type_t variable_type = parser.symbol_info.variable_lookup.find_in_accessible_scopes(name);
+    ast::type_t variable_type = get_type_of_variable(parser.symbol_info, name);
 
     std::vector<ast::var_name_t> member_accesses;
     ast::type_t current_member_access_type = get_aliased_type(parser, variable_type);
@@ -493,7 +505,7 @@ ast::expression_t parse_and_validate_variable_or_function_call(parser_t& parser)
     } else if(parser.peek_token().token_type == token_type_t::DOT) {
         return parse_and_validate_member_access(parser, name_token);
     } else {
-        return {ast::variable_access_t{parse_and_validate_variable(parser, name_token), {}}, parser.symbol_info.variable_lookup.find_in_accessible_scopes(ast::var_name_t(name_token.token_text))};
+        return {ast::variable_access_t{parse_and_validate_variable(parser, name_token), {}}, get_type_of_variable(parser.symbol_info, ast::var_name_t(name_token.token_text))};
     }
 }
 ast::expression_t parse_prefix_expression(parser_t& parser) {

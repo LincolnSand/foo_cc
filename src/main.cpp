@@ -36,21 +36,25 @@ int main(int argc, char** argv) {
     if(argc > 1) {
         std::string file_contents = read_file_into_string(argv[1]);
 
-        //try {
+        try {
             lexer_t lexer(file_contents.c_str());
             std::vector<token_t> tokens_list = scan_all_tokens(lexer);
 
             parser_t parser(tokens_list);
             ast::validated_program_t ast = parse(parser);
 
+            std::cout << "before type checking\n";
+            print_validated_ast(ast);
+
             type_check(ast); // mutates `valid_ast`
 
+            std::cout << "after type checking\n";
             print_validated_ast(ast);
-        //} catch(const std::runtime_error &e) {
+        } catch(const std::runtime_error &e) {
             // Temporary while we are fuzzing.
             // TODO: Implement proper error handling for compile errors.
-            //return 0;
-        //}
+            return 0;
+        }
 
         //std::string assembly_output = generate_asm(ast);
 

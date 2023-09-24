@@ -21,6 +21,8 @@
 
 void validate_type_name(const ast::type_t& expected, const ast::type_t& actual, const std::string& error_message);
 
+ast::type_t get_type_of_variable(const validation_t& validation, const ast::var_name_t& variable_name);
+
 std::shared_ptr<ast::grouping_t> parse_grouping(parser_t& parser);
 
 bool is_prefix_op(const token_t& token);

@@ -19,18 +19,6 @@ static ast::type_t get_type_of_function(const validation_t& validation, const as
     }
     throw std::logic_error("Function [" + function_name + "] is not declared.");
 }
-static ast::type_t get_type_of_variable(const validation_t& validation, const ast::var_name_t& variable_name) {
-    if(validation.variable_lookup.contains_in_accessible_scopes(variable_name)) {
-        return validation.variable_lookup.find_in_accessible_scopes(variable_name);
-    }
-    if(utils::contains(validation.global_variable_declarations, variable_name)) {
-        return validation.global_variable_declarations.at(variable_name).type_name;
-    }
-    if(utils::contains(validation.global_variable_definitions, variable_name)) {
-        return validation.global_variable_definitions.at(variable_name).type_name;
-    }
-    throw std::logic_error("Variable [" + variable_name + "] is not declared.");
-}
 
 void add_type_to_function_call(const validation_t& validation, const ast::function_call_t& expr, std::optional<ast::type_t>& exp_type) {
     exp_type = get_type_of_function(validation, expr.function_name);

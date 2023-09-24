@@ -355,6 +355,10 @@ void type_check_binary_expression(std::optional<ast::type_t>& type, ast::binary_
             if(!is_convertible(binary_exp.left.type.value(), binary_exp.right.type.value())) {
                 throw std::runtime_error("COMMA: Cannot convert from type [" + binary_exp.left.type.value().type_name + "] to type [" + binary_exp.right.type.value().type_name + "].");
             }
+            type = binary_exp.right.type.value();
+            if(!compare_type_names(binary_exp.left.type.value(), binary_exp.right.type.value())) {
+                binary_exp.left = make_convert_t(std::move(binary_exp.left), type.value());
+            }
             break;
 
 
@@ -414,30 +418,37 @@ void type_check_ternary_expression(std::optional<ast::type_t>& type, ast::ternar
 }
 
 void type_check_expression(ast::expression_t& expression) {
+    std::cout << '(';
     std::visit(overloaded{
         [&expression](const std::shared_ptr<ast::grouping_t>& grouping_exp) {
+            std::cout << "grouping expression type check\n";
             type_check_expression(grouping_exp->expr);
             expression.type = grouping_exp->expr.type.value();
         },
         [&expression](const std::shared_ptr<ast::convert_t>& convert_exp) {
+            std::cout << "convert expression type check\n";
             throw std::runtime_error("User casts not yet supported.");
         },
         [&expression](const std::shared_ptr<ast::unary_expression_t>& unary_exp) {
+            std::cout << "unary expression type check\n";
             type_check_expression(unary_exp->exp);
             type_check_unary_expression(expression.type, *unary_exp);
         },
         [&expression](const std::shared_ptr<ast::binary_expression_t>& binary_exp) {
+            std::cout << "binary expression type check\n";
             type_check_expression(binary_exp->left);
             type_check_expression(binary_exp->right);
             type_check_binary_expression(expression.type, *binary_exp);
         },
         [&expression](const std::shared_ptr<ast::ternary_expression_t>& ternary_exp) {
+            std::cout << "ternary expression type check\n";
             type_check_expression(ternary_exp->condition);
             type_check_expression(ternary_exp->if_true);
             type_check_expression(ternary_exp->if_false);
             type_check_ternary_expression(expression.type, *ternary_exp);
         },
         [](const std::shared_ptr<ast::function_call_t>& function_call_exp) {
+            std::cout << "function call expression type check\n";
             for(auto& param : function_call_exp->params) {
                 type_check_expression(param);
             }
@@ -448,12 +459,15 @@ void type_check_expression(ast::expression_t& expression) {
             // TODO:  which aren't `ast::function_call_t`, `ast::constant_t`, or `ast::variable_access_t` (other types of expressions are not yet typed and are thus currently unsupported).
         },
         [](const ast::constant_t& constant_exp) {
+            std::cout << "constant expression type check\n";
             // Nothing to do as this is a root expression
         },
         [](const ast::variable_access_t& var_name_exp) {
+            std::cout << "variable expression type check\n";
             // Nothing to do as this is a root expression
         }
     }, expression.expr);
+    std::cout << expression.type.value().type_name << ")\n";
 }
 void type_check_statement(ast::statement_t& statement, const ast::type_t& function_return_type) {
     std::visit(overloaded{
@@ -485,6 +499,7 @@ void type_check_statement(ast::statement_t& statement, const ast::type_t& functi
 }
 void type_check_declaration(ast::declaration_t& declaration) {
     if(declaration.value.has_value()) {
+        std::cout << "\ndeclarataion begin\n";
         type_check_expression(declaration.value.value());
 
         if(is_convertible(declaration.type_name, declaration.value.value().type.value())) {
