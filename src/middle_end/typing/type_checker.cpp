@@ -445,12 +445,12 @@ void type_check_expression(ast::expression_t& expression) {
 
             // TODO: We should type check function call expression params *after* they have been type checked instead of before.
             // TODO: Currently you cannot put expressions as function call params that don't exactly match the type of the function param and
-            // TODO:  which aren't `ast::function_call_t`, `ast::constant_t`, or `ast::var_name_t` (other types of expressions are not yet typed and are thus currently unsupported).
+            // TODO:  which aren't `ast::function_call_t`, `ast::constant_t`, or `ast::variable_access_t` (other types of expressions are not yet typed and are thus currently unsupported).
         },
         [](const ast::constant_t& constant_exp) {
             // Nothing to do as this is a root expression
         },
-        [](const ast::var_name_t& var_name_exp) {
+        [](const ast::variable_access_t& var_name_exp) {
             // Nothing to do as this is a root expression
         }
     }, expression.expr);

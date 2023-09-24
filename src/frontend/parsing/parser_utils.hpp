@@ -107,4 +107,4 @@ inline bool is_typedef_keyword(token_t token) {
     return token.token_type == token_type_t::TYPEDEF_KEYWORD;
 }
 
-ast::var_name_t validate_lvalue_expression_exp(const ast::expression_t& expr);
+ast::variable_access_t validate_lvalue_expression_exp(const ast::expression_t& expr);

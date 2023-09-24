@@ -40,7 +40,7 @@ void validate_compile_time_expression(validation_t& validation, const ast::expre
         [](const ast::constant_t& expression) {
             // totally fine, no need to go further as this is a terminal node of the AST
         },
-        [](const ast::var_name_t& expression) {
+        [](const ast::variable_access_t& expression) {
             throw std::runtime_error("Variables not supported in compile time expressions.");
             // TODO: Maybe support referencing other global variables???? Check the C standard to see what is considered valid.
         },
@@ -450,6 +450,34 @@ std::shared_ptr<ast::function_call_t> parse_and_validate_function_call(parser_t&
 
     return std::make_shared<ast::function_call_t>(std::move(function_call));
 }
+
+ast::expression_t parse_and_validate_member_access(parser_t& parser, const token_t name_token) {
+    ast::var_name_t name = ast::var_name_t { name_token.token_text };
+    ast::type_t variable_type = parser.symbol_info.variable_lookup.find_in_accessible_scopes(name);
+
+    std::vector<ast::var_name_t> member_accesses;
+    ast::type_t current_member_access_type = variable_type;
+
+    do {
+        parser.expect_token(token_type_t::DOT, "Expected `.` in member access.");
+
+        auto member_access_token = parser.advance_token();
+        if(member_access_token.token_type != token_type_t::IDENTIFIER) {
+            throw std::runtime_error("Expected identifier in member access.");
+        }
+        auto member_access_name = ast::var_name_t { member_access_token.token_text };
+
+        if(!utils::contains(current_member_access_type.field_offsets, member_access_name)) {
+            throw std::runtime_error("Member [" + member_access_name + "] does not exist in type [" + current_member_access_type.type_name + "]");
+        }
+
+        member_accesses.push_back(member_access_name);
+        current_member_access_type = current_member_access_type.fields.at(current_member_access_type.field_offsets.at(member_access_name));
+    } while(parser.peek_token().token_type == token_type_t::DOT);
+
+    return {ast::variable_access_t{name, member_accesses}, current_member_access_type};
+}
+
 ast::expression_t parse_and_validate_variable_or_function_call(parser_t& parser) {
     auto name_token = parser.advance_token();
     if(name_token.token_type != token_type_t::IDENTIFIER) {
@@ -458,8 +486,10 @@ ast::expression_t parse_and_validate_variable_or_function_call(parser_t& parser)
 
     if(parser.peek_token().token_type == token_type_t::LEFT_PAREN) {
         return {parse_and_validate_function_call(parser, name_token), get_function_return_type(parser, ast::func_name_t(name_token.token_text))};
+    } else if(parser.peek_token().token_type == token_type_t::DOT) {
+        return parse_and_validate_member_access(parser, name_token);
     } else {
-        return {parse_and_validate_variable(parser, name_token), parser.symbol_info.variable_lookup.find_in_accessible_scopes(ast::var_name_t(name_token.token_text))};
+        return {ast::variable_access_t{parse_and_validate_variable(parser, name_token), {}}, parser.symbol_info.variable_lookup.find_in_accessible_scopes(ast::var_name_t(name_token.token_text))};
     }
 }
 ast::expression_t parse_prefix_expression(parser_t& parser) {
@@ -682,17 +712,6 @@ ast::binary_operator_token_t get_op_from_compound_assignment_op(const token_t& t
 std::pair<ast::precedence_t, ast::precedence_t> ternary_binding_power() {
     return {5, 6}; // right-to-left
 }
-std::string get_identifier_from_expression(const ast::expression_t& expr) {
-    return std::visit(overloaded{
-        [](const ast::var_name_t& var) -> std::string {
-            return std::string(var);
-        },
-        [](const auto&) -> std::string {
-            throw std::runtime_error("Expression is not an identifier.");
-            return std::string("");
-        }
-    }, expr.expr);
-}
 ast::expression_t parse_and_validate_expression(parser_t& parser, const ast::precedence_t precedence) {
     auto lhs = parse_prefix_expression(parser);
 
@@ -708,7 +727,7 @@ ast::expression_t parse_and_validate_expression(parser_t& parser, const ast::pre
                 break;
             }
             parser.advance_token();
-            lhs = {make_postfix_op(op, std::move(lhs)), std::nullopt};
+            lhs = ast::expression_t{make_postfix_op(op, std::move(lhs)), std::nullopt};
             continue;
         }
 
@@ -720,14 +739,14 @@ ast::expression_t parse_and_validate_expression(parser_t& parser, const ast::pre
             }
             parser.advance_token();
             auto rhs = parse_and_validate_expression(parser, r_bp);
-            lhs = {make_infix_op(op, std::move(lhs), std::move(rhs)), std::nullopt};
+            lhs = ast::expression_t{make_infix_op(op, std::move(lhs), std::move(rhs)), std::nullopt};
             continue;
         }
 
         if(is_compound_assignment_op(parser.peek_token())) {
             auto op = get_op_from_compound_assignment_op(parser.peek_token());
             parser.advance_token();
-            lhs = {make_infix_op(ast::binary_operator_token_t::ASSIGNMENT, {validate_lvalue_expression_exp(lhs), std::nullopt}, {make_infix_op(op, {validate_lvalue_expression_exp(lhs), std::nullopt}, parse_and_validate_expression(parser, precedence)), std::nullopt}), std::nullopt};
+            lhs = ast::expression_t{make_infix_op(ast::binary_operator_token_t::ASSIGNMENT, ast::expression_t{validate_lvalue_expression_exp(lhs), std::nullopt}, ast::expression_t{make_infix_op(op, ast::expression_t{validate_lvalue_expression_exp(lhs), std::nullopt}, parse_and_validate_expression(parser, precedence)), std::nullopt}), std::nullopt};
             continue;
         }
 

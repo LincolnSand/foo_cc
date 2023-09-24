@@ -25,6 +25,7 @@ enum class token_type_t : std::uint32_t {
     LESS_THAN, GREATER_THAN,
     EQUALS,
     QUESTION_MARK, COLON,
+    DOT,
 
     MODULO,
     BITWISE_AND, BITWISE_OR, BITWISE_XOR,

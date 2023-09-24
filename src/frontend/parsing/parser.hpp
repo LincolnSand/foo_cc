@@ -42,7 +42,6 @@ std::shared_ptr<ast::binary_expression_t> make_infix_op(const ast::binary_operat
 bool is_compound_assignment_op(const token_t& token);
 ast::binary_operator_token_t get_op_from_compound_assignment_op(const token_t& token);
 std::pair<ast::precedence_t, ast::precedence_t> ternary_binding_power();
-std::string get_identifier_from_expression(const ast::expression_t& expr);
 ast::expression_t parse_and_validate_expression(parser_t& parser, const ast::precedence_t precedence);
 ast::expression_t parse_and_validate_expression(parser_t& parser);
 

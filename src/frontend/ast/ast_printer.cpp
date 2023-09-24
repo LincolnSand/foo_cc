@@ -107,9 +107,12 @@ void print_expression(const bool has_types, const ast::expression_t& expr) {
                 }
             }, constant.value);
         },
-        [](const ast::var_name_t& var_name) -> void {
+        [](const ast::variable_access_t& var_name) -> void {
             std::cout << "(identifier: ";
-            std::cout << var_name;
+            std::cout << var_name.variable;
+            for(const ast::var_name_t& member_access : var_name.member_accesses) {
+                std::cout << '.' << member_access;
+            }
         },
         [has_types](const std::shared_ptr<ast::convert_t>& convert) -> void {
             std::cout << "(convert: ";

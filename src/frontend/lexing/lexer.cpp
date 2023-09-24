@@ -338,6 +338,8 @@ token_t scan_token(lexer_t& lexer) {
             return lexer.make_token(token_type_t::QUESTION_MARK);
         case ':':
             return lexer.make_token(token_type_t::COLON);
+        case '.':
+            return lexer.make_token(token_type_t::DOT);
     }
 
     std::cout << "Unrecognized token: " << c << "\n";

@@ -45,6 +45,11 @@ struct type_t {
     std::vector<type_t> fields;
 };
 
+struct variable_access_t {
+    var_name_t variable;
+    std::vector<var_name_t> member_accesses;
+};
+
 struct grouping_t;
 struct convert_t;
 struct unary_expression_t;
@@ -53,7 +58,7 @@ struct ternary_expression_t;
 struct function_call_t;
 // `std::shared_ptr` is to get around not having full recursive type definitions in C++
 // TODO: maybe use `std::unique_ptr` instead of `std::shared_ptr`
-using expression_exp_type_t = std::variant<std::shared_ptr<grouping_t>, std::shared_ptr<convert_t>, std::shared_ptr<unary_expression_t>, std::shared_ptr<binary_expression_t>, std::shared_ptr<ternary_expression_t>, std::shared_ptr<function_call_t>, constant_t, var_name_t>;
+using expression_exp_type_t = std::variant<std::shared_ptr<grouping_t>, std::shared_ptr<convert_t>, std::shared_ptr<unary_expression_t>, std::shared_ptr<binary_expression_t>, std::shared_ptr<ternary_expression_t>, std::shared_ptr<function_call_t>, variable_access_t, constant_t>;
 struct expression_t {
     expression_exp_type_t expr;
     std::optional<type_t> type; // usually has `std::nullopt` if not a literal after initial parsing stage. Is filled in during semantic analysis and type checking pass (as we often need symbol tables).
