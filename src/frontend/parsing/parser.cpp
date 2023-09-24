@@ -1038,6 +1038,22 @@ ast::type_t parse_and_validate_type(parser_t& parser) {
         if(type_iter == std::end(type_table)) {
             throw std::runtime_error("Type not found.");
         }
+
+        if(!type_iter->second.size.has_value()) {
+            if(type_iter->second.aliased_type_category.value() != ast::type_category_t::STRUCT) {
+                throw std::logic_error("Expected struct for undefined type size in typedef.");
+            }
+
+            auto& aliased_type_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::STRUCT));
+            auto aliased_type_iter = aliased_type_table.find(type_iter->second.aliased_type.value());
+            if(aliased_type_iter == std::end(aliased_type_table)) {
+                throw std::runtime_error("Cannot instantiate aliased struct forward declaration.");
+            }
+            if(!aliased_type_iter->second.size.has_value()) {
+                throw std::runtime_error("Cannot instantiate aliased struct forward declaration.");
+            }
+        }
+
         return type_iter->second;
     }
 }
@@ -1392,10 +1408,7 @@ ast::type_t parse_struct(parser_t& parser) {
         // parse struct definition
         if(!utils::contains(struct_type_table, name) || !struct_type_table.at(name).size.has_value()) {
             auto struct_definition = parse_and_validate_struct_body(parser, name);
-            // TODO: Double check the C++ docs to make sure this is equivalent to:
-            // struct_type_table.at(name) = std::move(struct_definition);
-            // for when there is already a struct declaration entry at `name`a
-            struct_type_table.insert({name, struct_definition}); // should overwrite any struct declaration entry that was previously written to `struct_type_table.at(name)`
+            struct_type_table[name] = struct_definition;
             return struct_definition;
         }
         throw std::runtime_error("Struct [" + name + "] already defined.");

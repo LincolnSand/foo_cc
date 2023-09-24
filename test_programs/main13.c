@@ -1,9 +1,9 @@
-struct foo {
+//typedef struct foo foo_t;
+
+typedef struct foo {
     int f;
     float t;
-};
-
-typedef struct foo foo_t;
+} foo_t;
 
 int main() {
     foo_t f1;
