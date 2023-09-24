@@ -134,32 +134,6 @@ static ast::type_category_t get_type_category_from_token_type(token_type_t token
     }
     throw std::runtime_error("Invalid/Unsupported type: [" + std::to_string(static_cast<std::uint32_t>(token_type)) + std::string("]"));
 }
-static ast::type_name_t get_type_name_from_token(token_t token) {
-    switch(token.token_type) {
-        case token_type_t::CHAR_CONSTANT:
-            return "char";
-        case token_type_t::INT_CONSTANT:
-            return "int";
-        case token_type_t::UNSIGNED_INT_CONSTANT:
-            return "unsigned int";
-        case token_type_t::LONG_CONSTANT:
-            return "long";
-        case token_type_t::UNSIGNED_LONG_CONSTANT:
-            return "unsigned long";
-        case token_type_t::LONG_LONG_CONSTANT:
-            return "long long";
-        case token_type_t::UNSIGNED_LONG_LONG_CONSTANT:
-            return "unsigned long long";
-        case token_type_t::FLOAT_CONSTANT:
-            return "float";
-        case token_type_t::DOUBLE_CONSTANT:
-            return "double";
-        case token_type_t::LONG_DOUBLE_CONSTANT:
-            return "long double";
-        default:
-            return std::string(token.token_text);
-    }
-}
 static std::size_t get_size_from_type(const ast::type_name_t& type_name) {
     if(type_name == "char" || type_name == "signed char" || type_name == "unsigned char") {
         return sizeof(char);
@@ -451,12 +425,42 @@ std::shared_ptr<ast::function_call_t> parse_and_validate_function_call(parser_t&
     return std::make_shared<ast::function_call_t>(std::move(function_call));
 }
 
+ast::type_t get_aliased_type(parser_t& parser, const ast::type_t type) {
+    // Check whether it is a valid typedef name
+    if(type.type_category != ast::type_category_t::TYPEDEF) {
+        return type;
+    }
+
+    auto current_type = type;
+    if(!current_type.size.has_value()) {
+        while(current_type.type_category == ast::type_category_t::TYPEDEF) {
+            auto& type_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(current_type.aliased_type_category.value()));
+            auto type_iter = type_table.find(current_type.aliased_type.value());
+            if(type_iter == std::end(type_table)) {
+                throw std::runtime_error("Type not found.");
+            }
+            current_type = type_iter->second;
+        }
+
+        if(current_type.type_category == ast::type_category_t::STRUCT) {
+            auto& struct_type_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::STRUCT));
+            auto struct_type_iter = struct_type_table.find(current_type.type_name);
+            if(struct_type_iter == std::end(struct_type_table)) {
+                throw std::runtime_error("Member access not supported for struct forward declarations.");
+            }
+            current_type = struct_type_iter->second;
+        }
+    }
+
+    return current_type;
+}
+
 ast::expression_t parse_and_validate_member_access(parser_t& parser, const token_t name_token) {
     ast::var_name_t name = ast::var_name_t { name_token.token_text };
     ast::type_t variable_type = parser.symbol_info.variable_lookup.find_in_accessible_scopes(name);
 
     std::vector<ast::var_name_t> member_accesses;
-    ast::type_t current_member_access_type = variable_type;
+    ast::type_t current_member_access_type = get_aliased_type(parser, variable_type);
 
     do {
         parser.expect_token(token_type_t::DOT, "Expected `.` in member access.");
@@ -472,7 +476,7 @@ ast::expression_t parse_and_validate_member_access(parser_t& parser, const token
         }
 
         member_accesses.push_back(member_access_name);
-        current_member_access_type = current_member_access_type.fields.at(current_member_access_type.field_offsets.at(member_access_name));
+        current_member_access_type = get_aliased_type(parser, current_member_access_type.fields.at(current_member_access_type.field_offsets.at(member_access_name)));
     } while(parser.peek_token().token_type == token_type_t::DOT);
 
     return {ast::variable_access_t{name, member_accesses}, current_member_access_type};
@@ -1073,8 +1077,9 @@ ast::type_t parse_and_validate_type(parser_t& parser) {
 ast::type_t parse_typedef_struct_decl_or_def(parser_t& parser) {
     parser.expect_token(token_type_t::STRUCT_KEYWORD, "Expected `struct` keyword in struct declaration/definition.");
 
-    const auto name_token = parser.advance_token();
+    const auto name_token = parser.peek_token();
     if(name_token.token_type == token_type_t::IDENTIFIER) {
+        parser.advance_token(); // consume name token
         auto name = ast::type_name_t(name_token.token_text);
 
         auto& struct_type_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::STRUCT));
@@ -1084,10 +1089,7 @@ ast::type_t parse_typedef_struct_decl_or_def(parser_t& parser) {
             // parse struct definition
             if(!utils::contains(struct_type_table, name) || !struct_type_table.at(name).size.has_value()) {
                 auto struct_definition = parse_and_validate_typedef_struct_body(parser, name);
-                // TODO: Double check the C++ docs to make sure this is equivalent to:
-                // struct_type_table.at(name) = std::move(struct_definition);
-                // for when there is already a struct declaration entry at `name`a
-                struct_type_table.insert({name, struct_definition}); // should overwrite any struct declaration entry that was previously written to `struct_type_table.at(name)`
+                struct_type_table[name] = struct_definition;
                 return struct_definition;
             }
             throw std::runtime_error("Struct [" + name + "] already defined.");
