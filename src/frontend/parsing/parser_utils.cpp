@@ -65,3 +65,50 @@ ast::variable_access_t validate_lvalue_expression_exp(const ast::expression_t& e
         }
     }, expr.expr);
 }
+ast::expression_t validate_lvalue_expression_exp_with_type(const ast::expression_t& expr) {
+    return std::visit(overloaded{
+        [&expr](const std::shared_ptr<ast::grouping_t>& grouping) -> ast::expression_t {
+            return validate_lvalue_expression_exp_with_type(grouping->expr);
+        },
+        [&expr](const std::shared_ptr<ast::unary_expression_t>& unary_exp) -> ast::expression_t {
+            switch(unary_exp->op) {
+                case ast::unary_operator_token_t::PLUS_PLUS:
+                case ast::unary_operator_token_t::MINUS_MINUS:
+                    if(unary_exp->fixity == ast::unary_operator_fixity_t::PREFIX) {
+                        return validate_lvalue_expression_exp_with_type(unary_exp->exp);
+                    }
+            }
+            throw std::runtime_error("Cannot assign to unary operator of type [" + std::to_string(static_cast<std::uint16_t>(unary_exp->op)) + "].");
+            return expr;
+        },
+        [](const std::shared_ptr<ast::binary_expression_t>& binary_exp) -> ast::expression_t {
+            switch(binary_exp->op) {
+                case ast::binary_operator_token_t::ASSIGNMENT:
+                    return validate_lvalue_expression_exp_with_type(binary_exp->left);
+                case ast::binary_operator_token_t::COMMA:
+                    return validate_lvalue_expression_exp_with_type(binary_exp->right);
+            }
+            throw std::runtime_error("Cannot assign to binary operator of type [" + std::to_string(static_cast<std::uint16_t>(binary_exp->op)) + "].");
+        },
+        // TODO: Check if C has lvalue ternary expressions. Currently only rvalue ternary expressions are supported. I believe only C++ has lvalue expressions, but I need to double check.
+        [&expr](const std::shared_ptr<ast::ternary_expression_t>& ternary_exp) -> ast::expression_t {
+            throw std::runtime_error("Cannot assign to ternary operator.");
+            return expr;
+        },
+        [&expr](const std::shared_ptr<ast::function_call_t>& function_call) -> ast::expression_t {
+            throw std::runtime_error("Cannot assign to function call.");
+            return expr;
+        },
+        [&expr](const ast::constant_t& constant) -> ast::expression_t {
+            throw std::runtime_error("You cannot assign to a constant.");
+            return expr;
+        },
+        [&expr](const ast::variable_access_t& var_name) -> ast::expression_t {
+            return expr;
+        },
+        [&expr](const std::shared_ptr<ast::convert_t>& convert) -> ast::expression_t {
+            throw std::runtime_error("Cannot assign to cast.");
+            return expr;
+        }
+    }, expr.expr);
+}

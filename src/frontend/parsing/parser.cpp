@@ -19,7 +19,7 @@ ast::type_t get_type_of_variable(const validation_t& validation, const ast::var_
     if(utils::contains(validation.global_variable_definitions, variable_name)) {
         return validation.global_variable_definitions.at(variable_name).type_name;
     }
-    throw std::logic_error("Variable [" + variable_name + "] is not declared.");
+    throw std::runtime_error("Variable [" + variable_name + "] is not declared.");
 }
 
 
@@ -762,7 +762,8 @@ ast::expression_t parse_and_validate_expression(parser_t& parser, const ast::pre
         if(is_compound_assignment_op(parser.peek_token())) {
             auto op = get_op_from_compound_assignment_op(parser.peek_token());
             parser.advance_token();
-            lhs = ast::expression_t{make_infix_op(ast::binary_operator_token_t::ASSIGNMENT, ast::expression_t{validate_lvalue_expression_exp(lhs), std::nullopt}, ast::expression_t{make_infix_op(op, ast::expression_t{validate_lvalue_expression_exp(lhs), std::nullopt}, parse_and_validate_expression(parser, precedence)), std::nullopt}), std::nullopt};
+            auto lvalue = validate_lvalue_expression_exp_with_type(lhs);
+            lhs = ast::expression_t{make_infix_op(ast::binary_operator_token_t::ASSIGNMENT, ast::expression_t{validate_lvalue_expression_exp(lvalue), lvalue.type.value()}, ast::expression_t{make_infix_op(op, ast::expression_t{validate_lvalue_expression_exp(lvalue), lvalue.type.value()}, parse_and_validate_expression(parser, precedence)), std::nullopt}), std::nullopt};
             continue;
         }
 
@@ -1069,12 +1070,16 @@ ast::type_t parse_and_validate_type(parser_t& parser) {
                 }
             }
 
-            if(type_iter->second.aliased_type_category.value() != ast::type_category_t::STRUCT) {
+            auto& aliased_type_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(type_iter->second.aliased_type_category.value()));
+            auto aliased_type_iter = aliased_type_table.find(type_iter->second.aliased_type.value());
+
+            if(!aliased_type_iter->second.size.has_value() && aliased_type_iter->second.type_category != ast::type_category_t::STRUCT) {
+                std::cout << "type_iter->second.type_name: " << type_iter->second.type_name << '\n';
+                std::cout << "type_iter->second.type_category: " << static_cast<std::uint32_t>(type_iter->second.type_category) << '\n';
+
                 throw std::logic_error("Expected struct for undefined type size in typedef.");
             }
 
-            auto& aliased_type_table = parser.symbol_info.type_table.at(static_cast<std::uint32_t>(ast::type_category_t::STRUCT));
-            auto aliased_type_iter = aliased_type_table.find(type_iter->second.aliased_type.value());
             if(aliased_type_iter == std::end(aliased_type_table)) {
                 throw std::runtime_error("Cannot instantiate aliased struct forward declaration.");
             }

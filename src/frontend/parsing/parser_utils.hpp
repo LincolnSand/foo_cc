@@ -108,3 +108,4 @@ inline bool is_typedef_keyword(token_t token) {
 }
 
 ast::variable_access_t validate_lvalue_expression_exp(const ast::expression_t& expr);
+ast::expression_t validate_lvalue_expression_exp_with_type(const ast::expression_t& expr);

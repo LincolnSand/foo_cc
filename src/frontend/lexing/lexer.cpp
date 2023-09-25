@@ -342,7 +342,7 @@ token_t scan_token(lexer_t& lexer) {
             return lexer.make_token(token_type_t::DOT);
     }
 
-    std::cout << "Unrecognized token: " << c << "\n";
+    std::cout << "Unrecognized token: '" << c << "'\n";
     return lexer.make_token(token_type_t::ERROR);
 }
 // TODO: double check that `merge_tokens` is correct and test it thoroughly
