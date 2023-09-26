@@ -392,6 +392,11 @@ ast::precedence_t prefix_binding_power(const ast::unary_operator_token_t token) 
     throw std::runtime_error("Invalid prefix token.");
 }
 std::shared_ptr<ast::unary_expression_t> make_prefix_op(const ast::unary_operator_token_t op, ast::expression_t&& rhs) {
+    // TODO: Double check these are valid lvalues for `++` and `--`
+    if(op == ast::unary_operator_token_t::PLUS_PLUS || op == ast::unary_operator_token_t::MINUS_MINUS) {
+        auto lvalue = validate_lvalue_expression_exp_with_type(std::move(rhs));
+        return std::make_shared<ast::unary_expression_t>(ast::unary_expression_t{ast::unary_operator_fixity_t::PREFIX, op, std::move(lvalue)});
+    }
     return std::make_shared<ast::unary_expression_t>(ast::unary_expression_t{ast::unary_operator_fixity_t::PREFIX, op, std::move(rhs)});
 }
 ast::var_name_t parse_and_validate_variable(parser_t& parser, const token_t name_token) {
@@ -571,6 +576,10 @@ ast::precedence_t postfix_binding_power(const ast::unary_operator_token_t token)
     throw std::runtime_error("Invalid postfix token.");
 }
 std::shared_ptr<ast::unary_expression_t> make_postfix_op(const ast::unary_operator_token_t op, ast::expression_t&& lhs) {
+    if(op == ast::unary_operator_token_t::PLUS_PLUS || op == ast::unary_operator_token_t::MINUS_MINUS) {
+        auto lvalue = validate_lvalue_expression_exp_with_type(std::move(lhs));
+        return std::make_shared<ast::unary_expression_t>(ast::unary_expression_t{ast::unary_operator_fixity_t::POSTFIX, op, std::move(lvalue)});
+    }
     return std::make_shared<ast::unary_expression_t>(ast::unary_expression_t{ast::unary_operator_fixity_t::POSTFIX, op, std::move(lhs)});
 }
 bool is_infix_binary_op(const token_t& token) {
@@ -682,7 +691,11 @@ std::pair<ast::precedence_t, ast::precedence_t> infix_binding_power(const ast::b
     throw std::runtime_error("Invalid infix token.");
 }
 std::shared_ptr<ast::binary_expression_t> make_infix_op(const ast::binary_operator_token_t op, ast::expression_t&& lhs, ast::expression_t&& rhs) {
-    return std::make_shared<ast::binary_expression_t>(ast::binary_expression_t{op, std::move(lhs), std::move(rhs)}); // we validate this is a valid lvalue in the backend during codegen ast traversal
+    if(op == ast::binary_operator_token_t::ASSIGNMENT) {
+        auto lvalue = validate_lvalue_expression_exp_with_type(std::move(lhs));
+        return std::make_shared<ast::binary_expression_t>(ast::binary_expression_t{op, std::move(lvalue), std::move(rhs)});
+    }
+    return std::make_shared<ast::binary_expression_t>(ast::binary_expression_t{op, std::move(lhs), std::move(rhs)});
 }
 bool is_compound_assignment_op(const token_t& token) {
     switch(token.token_type) {
