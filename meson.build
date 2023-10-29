@@ -20,12 +20,20 @@ project_source_files = [
     'debug/exception_stack_trace.cpp',
 
     'src/io/file_io.cpp',
+
     'src/frontend/lexing/lexer.cpp',
+
     'src/frontend/parsing/parser_utils.cpp',
     'src/frontend/parsing/parser.cpp',
+
     'src/middle_end/typing/generate_typing.cpp',
     'src/middle_end/typing/type_checker.cpp',
+
     'src/backend/interpreter/compile_time_evaluator.cpp',
+
+    'src/backend/x86_64/compile_operators.cpp',
+    'src/backend/x86_64/traverse_ast.cpp',
+    'src/backend/x86_64/traverse_ast_helpers.cpp',
 
     'src/frontend/ast/ast_printer.cpp'
 ]

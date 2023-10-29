@@ -10,6 +10,5 @@ void generate_expression(assembly_output_t& assembly_output, const ast::expressi
 void generate_binary_operation(assembly_output_t& assembly_output, const ast::binary_expression_t& binary_exp, void(*func)(assembly_output_t&));
 void generate_logical_and(assembly_output_t& assembly_output, const ast::binary_expression_t& binary_exp);
 void generate_logical_or(assembly_output_t& assembly_output, const ast::binary_expression_t& binary_exp);
-// `assignment.left` *must* successfully return an `ast::var_name_t` when passed to `validate_lvalue_expression_exp`.
 void generate_assignment_expression(assembly_output_t& assembly_output, const ast::binary_expression_t& assignment);
 void generate_unary_operation(assembly_output_t& assembly_output, const ast::unary_expression_t& unary_exp, void(*func)(assembly_output_t&));

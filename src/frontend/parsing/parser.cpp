@@ -112,7 +112,94 @@ bool has_return_statement(const ast::compound_statement_t& compound_stmt) {
     }
     return false;
 }
+bool is_constant_with_value_zero(const ast::expression_t& expr) {
+    return std::visit(overloaded{
+        [](const ast::constant_t& constant) {
+            return std::visit(overloaded{
+                [](const auto& value) {
+                    return value == 0;
+                }
+            }, constant.value);
+        },
+        [](const std::shared_ptr<ast::convert_t>& convert) {
+            return is_constant_with_value_zero(convert->expr);
+        },
+        [](const auto&) {
+            return false;
+        }
+    }, expr.expr);
+}
 
+template<typename T>
+static type_punned_constant_t type_pun_value(const T& value) {
+    auto buffer = std::make_unique<std::byte[]>(sizeof(value));
+    std::memcpy(buffer.get(), &value, sizeof(value));
+    return type_punned_constant_t{std::move(buffer), sizeof(value)};
+}
+static type_punned_constant_t get_type_punned_constant_value_with_optional_convert(const ast::expression_t& expr, const std::optional<ast::type_t>& convert_type) {
+    return std::visit(overloaded{
+        [&convert_type](const ast::constant_t& constant) {
+            return std::visit(overloaded{
+                [&convert_type](const auto& value) {
+                    if(convert_type.has_value()) {
+                        if(convert_type.value().type_name == "char") {
+                            return type_pun_value(static_cast<char>(value));
+                        } else if(convert_type.value().type_name == "signed char") {
+                            return type_pun_value(static_cast<signed char>(value));
+                        } else if(convert_type.value().type_name == "unsigned char") {
+                            return type_pun_value(static_cast<unsigned char>(value));
+                        } else if(convert_type.value().type_name == "short") {
+                            return type_pun_value(static_cast<short>(value));
+                        } else if(convert_type.value().type_name == "unsigned short") {
+                            return type_pun_value(static_cast<unsigned short>(value));
+                        } else if(convert_type.value().type_name == "int") {
+                            return type_pun_value(static_cast<int>(value));
+                        } else if(convert_type.value().type_name == "unsigned int") {
+                            return type_pun_value(static_cast<unsigned int>(value));
+                        } else if(convert_type.value().type_name == "long") {
+                            return type_pun_value(static_cast<long>(value));
+                        } else if(convert_type.value().type_name == "unsigned long") {
+                            return type_pun_value(static_cast<unsigned long>(value));
+                        } else if(convert_type.value().type_name == "long long") {
+                            return type_pun_value(static_cast<long long>(value));
+                        } else if(convert_type.value().type_name == "unsigned long long") {
+                            return type_pun_value(static_cast<unsigned long long>(value));
+                        } else if(convert_type.value().type_name == "float") {
+                            return type_pun_value(static_cast<float>(value));
+                        } else if(convert_type.value().type_name == "double") {
+                            return type_pun_value(static_cast<double>(value));
+                        } else if(convert_type.value().type_name == "long double") {
+                            return type_pun_value(static_cast<long double>(value));
+                        } else {
+                            throw std::logic_error("Unsupported type: [" + convert_type.value().type_name + "]");
+                            return type_punned_constant_t{};
+                        }
+                    } else {
+                        return type_pun_value(value);
+                    }
+                }
+            }, constant.value);
+        },
+        [](const auto&) {
+            throw std::logic_error("Not a constant expression.");
+            return type_punned_constant_t{};
+        }
+    }, expr.expr);
+}
+type_punned_constant_t get_type_punned_constant(const ast::expression_t& expr) {
+    return std::visit(overloaded{
+        [&expr](const ast::constant_t& constant) {
+            return get_type_punned_constant_value_with_optional_convert(expr, std::nullopt);
+        },
+        [&expr](const std::shared_ptr<ast::convert_t>& convert) {
+            return get_type_punned_constant_value_with_optional_convert(convert->expr, expr.type);
+        },
+        [](const auto&) {
+            throw std::logic_error("Not a constant expression.");
+            return type_punned_constant_t{};
+        }
+    }, expr.expr);
+}
 
 static ast::type_category_t get_type_category_from_token_type(token_type_t token_type) {
     switch(token_type) {

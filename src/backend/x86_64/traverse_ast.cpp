@@ -4,6 +4,9 @@
 void generate_grouping(assembly_output_t& assembly_output, const ast::grouping_t& grouping) {
     generate_expression(assembly_output, grouping.expr);
 }
+void generate_convert(assembly_output_t& assembly_output, const ast::convert_t& convert) {
+
+}
 void generate_unary_expression(assembly_output_t& assembly_output, const ast::unary_expression_t& unary_exp) {
     if(unary_exp.fixity == ast::unary_operator_fixity_t::PREFIX) {
         switch(unary_exp.op) {
@@ -108,73 +111,31 @@ void generate_binary_expression(assembly_output_t& assembly_output, const ast::b
     throw std::runtime_error("Invalid binary operator.");
 }
 void generate_ternary_expression(assembly_output_t& assembly_output, const ast::ternary_expression_t& ternary_exp) {
-    generate_expression(assembly_output, ternary_exp.condition);
-    pop_register(assembly_output, "rax");
-    const std::string else_label = "_else_" + std::to_string(assembly_output.current_label_number++);
-    const std::string end_label_name = "_end_" + std::to_string(assembly_output.current_label_number++);
-    assembly_output.output += "cmpq $0, %rax\n";
-    assembly_output.output += "je " + else_label + "\n";
-    generate_expression(assembly_output, ternary_exp.if_true);
-    assembly_output.output += "jmp " + end_label_name + "\n";
-    assembly_output.output += else_label + ":\n";
-    generate_expression(assembly_output, ternary_exp.if_false);
-    assembly_output.output += end_label_name + ":\n";
+
 }
 void push_params(assembly_output_t& assembly_output, const std::vector<ast::expression_t>& params) {
-    for(const auto& param : params) {
-        generate_expression(assembly_output, param);
-    }
 
-    if(params.size() >= 1) {
-        pop_register(assembly_output, "rdi");
-    }
-    if(params.size() >= 2) {
-        pop_register(assembly_output, "rsi");
-    }
-    if(params.size() >= 3) {
-        pop_register(assembly_output, "rdx");
-    }
-    if(params.size() >= 4) {
-        pop_register(assembly_output, "rcx");
-    }
-    if(params.size() >= 5) {
-        pop_register(assembly_output, "r8");
-    }
-    if(params.size() >= 6) {
-        pop_register(assembly_output, "r9");
-    }
-    if(params.size() >= 7); // values are already on the stack in reverse order, so no need to do anything here
-
-    // callee preserves the registers `rbx`, `rsp`, `rbp`, `r12`, `r13`, `r14`, and `r15`.
 }
 void pop_params(assembly_output_t& assembly_output, const ast::function_call_t& function_call) {
-    if(function_call.params.size() > 6) { // parameter isn't in register
-        assembly_output.output += "addq $" + std::to_string(function_call.params.size()-6) + ", %rsp\n"; // deallocate caller allocated parameters
-    }
+
 }
 void generate_function_call(assembly_output_t& assembly_output, const ast::function_call_t& function_call_exp) {
-    push_params(assembly_output, function_call_exp.params);
-    bool needs_alignment = false;
-    if((assembly_output.current_rbp_offset % 16) == sizeof(std::uint64_t)) {
-        assembly_output.output += "subq $" + std::to_string(sizeof(std::uint64_t)) + ", %rsp\n";
-        assembly_output.current_rbp_offset += sizeof(std::uint64_t);
-        needs_alignment = true;
-    } else if(assembly_output.current_rbp_offset % 16 != 0) {
-        throw std::logic_error("Invalid stack alignment.");
-    }
-    assembly_output.output += "call " + function_call_exp.function_name + "\n";
-    if(needs_alignment) {
-        assembly_output.output += "addq $" + std::to_string(sizeof(std::uint64_t)) + ", %rsp\n";
-        assembly_output.current_rbp_offset -= sizeof(std::uint64_t);
-    }
-    pop_params(assembly_output, function_call_exp); // does not trash or affect the current register values after function call
-    store_register(assembly_output, "rax"); // push the return value of the function call
+
+}
+void generate_variable_access(assembly_output_t& assembly_output, const ast::variable_access_t& var_name) {
+
+}
+void generate_constant(assembly_output_t& assembly_output, const ast::constant_t& constant) {
+
 }
 
 void generate_expression(assembly_output_t& assembly_output, const ast::expression_t& expression) {
     std::visit(overloaded{
         [&assembly_output](const std::shared_ptr<ast::grouping_t>& grouping) {
             generate_grouping(assembly_output, *grouping);
+        },
+        [&assembly_output](const std::shared_ptr<ast::convert_t>& convert) {
+            generate_convert(assembly_output, *convert);
         },
         [&assembly_output](const std::shared_ptr<ast::unary_expression_t>& unary_exp) {
             generate_unary_expression(assembly_output, *unary_exp);
@@ -188,43 +149,20 @@ void generate_expression(assembly_output_t& assembly_output, const ast::expressi
         [&assembly_output](const std::shared_ptr<ast::function_call_t>& function_call_exp) {
             generate_function_call(assembly_output, *function_call_exp);
         },
-        [&assembly_output](const ast::constant_t& constant) {
-            store_constant(assembly_output, constant);
+        [&assembly_output](const ast::variable_access_t& var_name) {
+            generate_variable_access(assembly_output, var_name);
         },
-        [&assembly_output](const ast::var_name_t& var_name) {
-            pop_variable(assembly_output, var_name, "rax");
-            store_register(assembly_output, "rax");
-        }
-    }, expression);
+        [&assembly_output](const ast::constant_t& constant) {
+            generate_constant(assembly_output, constant);
+        },
+    }, expression.expr);
 }
 
 void generate_return_statement(assembly_output_t& assembly_output, const ast::return_statement_t& return_stmt) {
-    generate_expression(assembly_output, return_stmt.expr);
 
-    pop_register(assembly_output, "rax");
-
-    const auto rsp_offset = assembly_output.variable_lookup.get_total_stack_size();
-    assembly_output.output += "addq $" + std::to_string(rsp_offset) + ", %rsp\n";
-    assembly_output.current_rbp_offset -= rsp_offset;
-
-    generate_function_epilogue(assembly_output);
-
-    assembly_output.current_rbp_offset += rsp_offset;
 }
 void generate_if_statement(assembly_output_t& assembly_output, const ast::if_statement_t& if_stmt) {
-    generate_expression(assembly_output, if_stmt.if_exp);
-    pop_register(assembly_output, "rax");
-    const std::string else_label = "_else_" + std::to_string(assembly_output.current_label_number++);
-    const std::string end_label_name = "_end_" + std::to_string(assembly_output.current_label_number++);
-    assembly_output.output += "cmpq $0, %rax\n";
-    assembly_output.output += "je " + else_label + "\n";
-    generate_statement(assembly_output, if_stmt.if_body);
-    assembly_output.output += "jmp " + end_label_name + "\n";
-    assembly_output.output += else_label + ":\n";
-    if(if_stmt.else_body.has_value()) {
-        generate_statement(assembly_output, *if_stmt.else_body);
-    }
-    assembly_output.output += end_label_name + ":\n";
+
 }
 void generate_statement(assembly_output_t& assembly_output, const ast::statement_t& stmt) {
     std::visit(overloaded{
@@ -246,95 +184,60 @@ void generate_statement(assembly_output_t& assembly_output, const ast::statement
 }
 
 void generate_declaration(assembly_output_t& assembly_output, const ast::declaration_t& decl) {
-    // start off at `sizeof(std::uint64_t)` instead of `0` since we read from low to high memory address and we negate the offset from rbp in the emited code, so the first byte is `-8` and the range is [-8, 0) instead of [0, -8).
-    assembly_output.variable_lookup.add_new_variable_in_current_scope(decl.var_name, (assembly_output.current_rbp_offset += sizeof(std::uint64_t))); // TODO: we currently only support 64 bit integer type
 
-    allocate_stack_space_for_variable(assembly_output);
-
-    if(decl.value.has_value()) {
-        generate_expression(assembly_output, *decl.value);
-
-        pop_register(assembly_output, "rax");
-        store_variable(assembly_output, decl.var_name, "rax");
-    }
 }
 void generate_compound_statement(assembly_output_t& assembly_output, const ast::compound_statement_t& compound_stmt, const bool is_function) {
-    if(!is_function) {
-        assembly_output.variable_lookup.create_new_scope(); // new scope is created by caller for function definitions since the parameter variable names need to be declared in the function scope
-    }
 
-    for(const auto& stmt : compound_stmt.stmts) {
-        std::visit(overloaded{
-            [&assembly_output](const ast::statement_t& stmt) {
-                generate_statement(assembly_output, stmt);
-            },
-            [&assembly_output](const ast::declaration_t& stmt) {
-                generate_declaration(assembly_output, stmt);
-            }
-        }, stmt);
-    }
-
-    const auto rsp_offset = assembly_output.variable_lookup.destroy_current_scope();
-    if(!has_return_statement(compound_stmt)) { // functions destroy their block scope in the return statement
-        assembly_output.output += "addq $" + std::to_string(rsp_offset) + ", %rsp\n"; // no need to emit instructions after `ret` as they are unreachable
-    }
-    assembly_output.current_rbp_offset -= rsp_offset;
 }
 void generate_function_definition(assembly_output_t& assembly_output, const ast::function_definition_t& function_definition) {
-    assembly_output.output += ".text\n"; // text section
-    assembly_output.output += ".globl ";
-    assembly_output.output += function_definition.function_name;
-    assembly_output.output += "\n";
-    assembly_output.output += function_definition.function_name;
-    assembly_output.output += ":\n";
-
+    assembly_output.output += ".text\n";
+    assembly_output.output += ".globl " + function_definition.function_name + "\n";
+    assembly_output.output += function_definition.function_name + ":\n";
     generate_function_prologue(assembly_output);
-
-    assembly_output.variable_lookup.create_new_scope();
-    for(auto i = 0; i < function_definition.params.size(); ++i) {
-        if(function_definition.params.at(i).second.has_value()) {
-            if(i == (function_definition.params.size()-1)) {
-                store_register(assembly_output, "rdi");
-                assembly_output.current_rbp_offset += sizeof(std::uint64_t);
-            } else if(i == (function_definition.params.size()-2)) {
-                store_register(assembly_output, "rsi");
-                assembly_output.current_rbp_offset += sizeof(std::uint64_t);
-            } else if(i == (function_definition.params.size()-3)) {
-                store_register(assembly_output, "rdx");
-                assembly_output.current_rbp_offset += sizeof(std::uint64_t);
-            } else if(i == (function_definition.params.size()-4)) {
-                store_register(assembly_output, "rcx");
-                assembly_output.current_rbp_offset += sizeof(std::uint64_t);
-            } else if(i == (function_definition.params.size()-5)) {
-                store_register(assembly_output, "r8");
-                assembly_output.current_rbp_offset += sizeof(std::uint64_t);
-            } else if(i == (function_definition.params.size()-6)) {
-                store_register(assembly_output, "r9");
-                assembly_output.current_rbp_offset += sizeof(std::uint64_t);
-            } else {
-                assembly_output.output += "movq " + std::to_string(i*sizeof(std::uint64_t)) + "(%rbp), -" + std::to_string(assembly_output.current_rbp_offset += sizeof(std::uint64_t)) + "(%rbp)\n";
-            }
-            assembly_output.variable_lookup.add_new_variable_in_current_scope(function_definition.params.at(i).second.value(), assembly_output.current_rbp_offset);
-        } // ignore anonymous parameters as they cannot be referenced by the callee
-    }
-    generate_compound_statement(assembly_output, function_definition.statements, true);
+    generate_function_epilogue(assembly_output);
 }
-void generate_global_variable_definition(assembly_output_t& assembly_output, const ast::validated_global_variable_definition_t& global_var_def) {
-    if(global_var_def.value.value == 0) {
-        assembly_output.output += ".bss\n"; // bss section
+void generate_global_variable_definition(assembly_output_t& assembly_output, const ast::global_variable_declaration_t& global_var_def) {
+    // For now, we will only allocate and use .data, but we will use .rodata and .bss in the future
+    const auto required_alignment = global_var_def.type_name.alignment.value();
+    const auto allocation_size = global_var_def.type_name.size.value();
+    assembly_output.output += ".data\n";
+    assembly_output.output += ".align " + std::to_string(required_alignment) + "\n";
+    assembly_output.output += ".globl " + global_var_def.var_name + "\n";
+    assembly_output.output += global_var_def.var_name + ":\n";
+    if(!global_var_def.value.has_value() || is_constant_with_value_zero(global_var_def.value.value())) {
+        assembly_output.output += ".zero " + std::to_string(allocation_size) + "\n";
     } else {
-        assembly_output.output += ".data\n"; // data section
-    }
-    assembly_output.output += ".align 8\n"; // TODO: Linux align directive, currently hardcoded to 8 since we only support 64 bit integer type globals
-    assembly_output.output += ".globl ";
-    assembly_output.output += global_var_def.var_name;
-    assembly_output.output += "\n";
-    assembly_output.output += global_var_def.var_name;
-    assembly_output.output += ":\n";
-    if(global_var_def.value.value == 0) {
-        assembly_output.output += ".zero 8\n"; // TODO: is currently hardcoded to 8 since we only support 64 bit integer type
-    } else {
-        assembly_output.output += ".quad " + std::to_string(global_var_def.value.value) + "\n"; // TODO: is currently hardcoded to `.quad` (8 bytes) since we only support 64 bit integer type
+        auto remaining_amount_to_allocate = allocation_size;
+        const type_punned_constant_t type_punned_constant = get_type_punned_constant(global_var_def.value.value());
+        std::uint64_t current_byte_index = 0u;
+        // TODO: Maybe pull out these branches into a separate templated function to get rid of code duplication.
+        while(remaining_amount_to_allocate != 0) {
+            if(remaining_amount_to_allocate >= sizeof(std::uint64_t)) {
+                std::uint64_t value{};
+                std::memcpy(&value, type_punned_constant.bytes.get() + current_byte_index, sizeof(value));
+                assembly_output.output += ".quad " + std::to_string(value) + "\n";
+                remaining_amount_to_allocate -= sizeof(value);
+                current_byte_index += sizeof(value);
+            } else if(remaining_amount_to_allocate >= sizeof(std::uint32_t)) {
+                std::uint32_t value{};
+                std::memcpy(&value, type_punned_constant.bytes.get() + current_byte_index, sizeof(value));
+                assembly_output.output += ".long " + std::to_string(value) + "\n";
+                remaining_amount_to_allocate -= sizeof(value);
+                current_byte_index += sizeof(value);
+            } else if(remaining_amount_to_allocate >= sizeof(std::uint16_t)) {
+                std::uint16_t value{};
+                std::memcpy(&value, type_punned_constant.bytes.get() + current_byte_index, sizeof(value));
+                assembly_output.output += ".word " + std::to_string(value) + "\n";
+                remaining_amount_to_allocate -= sizeof(value);
+                current_byte_index += sizeof(value);
+            } else {
+                std::uint8_t value{};
+                std::memcpy(&value, type_punned_constant.bytes.get() + current_byte_index, sizeof(value));
+                assembly_output.output += ".byte " + std::to_string(value) + "\n";
+                remaining_amount_to_allocate -= sizeof(value);
+                current_byte_index += sizeof(value);
+            }
+        }
     }
 }
 
@@ -344,7 +247,7 @@ void generate_program(assembly_output_t& assembly_output, const ast::validated_p
             [&assembly_output](const ast::function_definition_t& function_def) {
                 generate_function_definition(assembly_output, function_def);
             },
-            [&assembly_output](const ast::validated_global_variable_definition_t& global_var_def) {
+            [&assembly_output](const ast::global_variable_declaration_t& global_var_def) {
                 generate_global_variable_definition(assembly_output, global_var_def);
             }
         }, top_level_decl);

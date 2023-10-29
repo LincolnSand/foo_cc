@@ -15,10 +15,12 @@
 #include <frontend/parsing/parser.hpp>
 #include <frontend/ast/ast_printer.hpp>
 #include <middle_end/typing/type_checker.hpp>
-//#include <backend/x86_64/traverse_ast.hpp>
+#include <backend/x86_64/traverse_ast.hpp>
 
 #include <exception_stack_trace.hpp>
 
+
+//#define FUZZING
 
 int main(int argc, char** argv) {
     std::string out_filename;
@@ -36,7 +38,9 @@ int main(int argc, char** argv) {
     if(argc > 1) {
         std::string file_contents = read_file_into_string(argv[1]);
 
-        //try {
+#ifdef FUZZING
+        try {
+#endif
             lexer_t lexer(file_contents.c_str());
             std::vector<token_t> tokens_list = scan_all_tokens(lexer);
 
@@ -50,15 +54,19 @@ int main(int argc, char** argv) {
 
             std::cout << "after type checking\n";
             print_validated_ast(ast);
-        //} catch(const std::runtime_error &e) {
+
+            std::string assembly_output = generate_asm(ast);
+            std::cout << "after assembly generation\n";
+
+#ifndef FUZZING
+            write_string_into_file(assembly_output, out_filename.c_str());
+#endif
+
+#ifdef FUZZING
+        } catch(const std::runtime_error &e) {
             // Temporary while we are fuzzing.
-            // TODO: Implement proper error handling for compile errors.
-            //return 0;
-        //}
-
-        //std::string assembly_output = generate_asm(ast);
-
-        //write_string_into_file(assembly_output, out_filename.c_str());
+        }
+#endif
     } else {
         std::cout << "You require an input file\n";
     }

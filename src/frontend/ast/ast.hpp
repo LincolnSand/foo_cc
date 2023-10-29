@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <cstddef>
 #include <cassert>
+#include <cstring>
 
 #include <frontend/lexing/lexer.hpp>
 #include <utils/common.hpp>
@@ -166,8 +167,8 @@ struct validated_program_t {
 inline ast::expression_t make_convert_t(ast::expression_t&& expr, ast::type_t type) {
     return ast::expression_t{ std::make_shared<ast::convert_t>(ast::convert_t{std::move(expr)}), type};
 }
-inline std::unique_ptr<ast::grouping_t> make_grouping(ast::expression_t&& exp) {
-    return std::make_unique<ast::grouping_t>(ast::grouping_t{std::move(exp)});
+inline std::shared_ptr<ast::grouping_t> make_grouping(ast::expression_t&& exp) {
+    return std::make_shared<ast::grouping_t>(ast::grouping_t{std::move(exp)});
 }
 
 
@@ -232,8 +233,10 @@ inline ast::type_t make_anonymous_struct_definition_type_t(const ast::type_table
 bool compare_type_names(const ast::type_t& lhs, const ast::type_t& rhs);
 
 // defined in frontend/parsing/parser.cpp:
-#if 0
-ast::type_t create_type_from_token(const token_t& token);
-#endif
 bool has_return_statement(const ast::compound_statement_t& compound_stmt);
-
+bool is_constant_with_value_zero(const ast::expression_t& expr);
+struct type_punned_constant_t {
+    std::unique_ptr<std::byte[]> bytes;
+    std::size_t number_of_bytes;
+};
+type_punned_constant_t get_type_punned_constant(const ast::expression_t& expr);

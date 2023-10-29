@@ -14,7 +14,7 @@ bool is_arithmetic(const ast::type_t& lhs) {
     return false;
 }
 bool is_convertible(const ast::type_t& lhs, const ast::type_t& rhs) {
-    if(lhs.type_category == rhs.type_category) {
+    if(lhs.type_category == rhs.type_category) { // TODO: this will give false positives for structs
         return true;
     }
 
@@ -524,6 +524,15 @@ void type_check(ast::validated_program_t& validated_program) {
             },
             [](ast::global_variable_declaration_t& global_var_def) {
                 // TODO: move compile time evaluation of global variables to here from `validate_ast.cpp`
+                if(global_var_def.value.has_value()) {
+                    if(is_convertible(global_var_def.type_name, global_var_def.value.value().type.value())) {
+                        if(!compare_type_names(global_var_def.type_name, global_var_def.value.value().type.value())) {
+                            global_var_def.value = make_convert_t(std::move(global_var_def.value.value()), global_var_def.type_name);
+                        }
+                    } else {
+                        throw std::runtime_error("DECLARATION: Cannot convert from type [" + global_var_def.value.value().type.value().type_name + "] to type [" + global_var_def.type_name.type_name + "].");
+                    }
+                }
             }
         }, e);
     }

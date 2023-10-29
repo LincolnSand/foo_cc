@@ -13,9 +13,14 @@
 
 struct assembly_output_t  {
     std::string output;
-    std::uint64_t current_label_number = 0; // appended to the end of labels so we don't get duplicate labels for things like boolean short circuiting and if statements
+    // Because of the .align gas directive, these should be unnecessary (we are also only using .data right now)
+    //std::uint64_t data_section_size = 0u; //number of bytes offset from beginning of .data section
+    //std::uint64_t rodata_section_size = 0u; //number of bytes offset from beginning of .rodata section
+    //std::uint64_t bss_section_size = 0u; //number of bytes offset from beginning of .bss section
+    std::uint64_t current_label_number = 0u; // appended to the end of labels so we don't get duplicate labels for things like boolean short circuiting and if statements
     utils::data_structures::backend_variable_lookup_t variable_lookup;
     std::uint64_t current_rbp_offset; // appended to `-` symbol since the stack grows downwards on x86_64
+    // For now, we will just align all variables to 8 bytes (64 bits) for stack allocations
 
     assembly_output_t() = default;
     assembly_output_t(std::string output) : output(std::move(output)) {}
@@ -26,9 +31,9 @@ void generate_expression(assembly_output_t& assembly_output, const ast::expressi
 
 void store_constant(assembly_output_t& assembly_output, const ast::constant_t& constant);
 void store_register(assembly_output_t& assembly_output, const std::string& register_name);
-void store_variable(assembly_output_t& assembly_output, const ast::var_name_t& variable_name, const std::string& register_name);
+void store_variable(assembly_output_t& assembly_output, const ast::variable_access_t& variable_name, const std::string& register_name);
 void pop_register(assembly_output_t& assembly_output, const std::string& register_name);
-void pop_variable(assembly_output_t& assembly_output, const ast::var_name_t& variable_name, const std::string& register_name);
+void pop_variable(assembly_output_t& assembly_output, const ast::variable_access_t& variable_name, const std::string& register_name);
 
 void allocate_stack_space_for_variable(assembly_output_t& assembly_output);
 
