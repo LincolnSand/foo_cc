@@ -200,13 +200,17 @@ void generate_global_variable_definition(assembly_output_t& assembly_output, con
     // For now, we will only allocate and use .data, but we will use .rodata and .bss in the future
     const auto required_alignment = global_var_def.type_name.alignment.value();
     const auto allocation_size = global_var_def.type_name.size.value();
-    assembly_output.output += ".data\n";
-    assembly_output.output += ".align " + std::to_string(required_alignment) + "\n";
-    assembly_output.output += ".globl " + global_var_def.var_name + "\n";
-    assembly_output.output += global_var_def.var_name + ":\n";
     if(!global_var_def.value.has_value() || is_constant_with_value_zero(global_var_def.value.value())) {
+        assembly_output.output += ".bss\n";
+        assembly_output.output += ".align " + std::to_string(required_alignment) + "\n";
+        assembly_output.output += ".globl " + global_var_def.var_name + "\n";
+        assembly_output.output += global_var_def.var_name + ":\n";
         assembly_output.output += ".zero " + std::to_string(allocation_size) + "\n";
     } else {
+        assembly_output.output += ".data\n";
+        assembly_output.output += ".align " + std::to_string(required_alignment) + "\n";
+        assembly_output.output += ".globl " + global_var_def.var_name + "\n";
+        assembly_output.output += global_var_def.var_name + ":\n";
         auto remaining_amount_to_allocate = allocation_size;
         const type_punned_constant_t type_punned_constant = get_type_punned_constant(global_var_def.value.value());
         std::uint64_t current_byte_index = 0u;
