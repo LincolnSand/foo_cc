@@ -240,3 +240,6 @@ struct type_punned_constant_t {
     std::size_t number_of_bytes;
 };
 type_punned_constant_t get_type_punned_constant(const ast::expression_t& expr);
+inline bool is_integral(const ast::type_t& lhs) {
+    return lhs.type_category == ast::type_category_t::INT || lhs.type_category == ast::type_category_t::UNSIGNED_INT;
+}

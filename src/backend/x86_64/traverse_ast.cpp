@@ -126,7 +126,14 @@ void generate_variable_access(assembly_output_t& assembly_output, const ast::var
 
 }
 void generate_constant(assembly_output_t& assembly_output, const ast::constant_t& constant) {
-
+    std::visit(overloaded{
+        [&assembly_output](const auto& value) {
+            assembly_output.output += "pushq $" + std::to_string(value) + "\n";
+        },
+        [](float) {},
+        [](double) {},
+        [](long double) {}
+    }, constant.value);
 }
 
 void generate_expression(assembly_output_t& assembly_output, const ast::expression_t& expression) {
@@ -159,7 +166,10 @@ void generate_expression(assembly_output_t& assembly_output, const ast::expressi
 }
 
 void generate_return_statement(assembly_output_t& assembly_output, const ast::return_statement_t& return_stmt) {
-
+    if(is_integral(return_stmt.expr.type.value())) {
+        generate_expression(assembly_output, return_stmt.expr);
+        assembly_output.output += "popq %rax\n";
+    }
 }
 void generate_if_statement(assembly_output_t& assembly_output, const ast::if_statement_t& if_stmt) {
 
@@ -187,13 +197,33 @@ void generate_declaration(assembly_output_t& assembly_output, const ast::declara
 
 }
 void generate_compound_statement(assembly_output_t& assembly_output, const ast::compound_statement_t& compound_stmt, const bool is_function) {
+    if(!is_function) {
+        assembly_output.variable_lookup.create_new_scope(); // new scope is created by caller for function definitions since the parameter variable names need to be declared in the function scope
+    }
 
+    for(const auto& stmt : compound_stmt.stmts) {
+        std::visit(overloaded{
+            [&assembly_output](const ast::statement_t& stmt) {
+                generate_statement(assembly_output, stmt);
+            },
+            [&assembly_output](const ast::declaration_t& stmt) {
+                generate_declaration(assembly_output, stmt);
+            }
+        }, stmt);
+    }
+
+    const auto rsp_offset = assembly_output.variable_lookup.destroy_current_scope();
+    if(!has_return_statement(compound_stmt)) { // functions destroy their block scope in the return statement
+        assembly_output.output += "addq $" + std::to_string(rsp_offset) + ", %rsp\n"; // no need to emit instructions after `ret` as they are unreachable
+    }
+    assembly_output.current_rbp_offset -= rsp_offset;
 }
 void generate_function_definition(assembly_output_t& assembly_output, const ast::function_definition_t& function_definition) {
     assembly_output.output += ".text\n";
     assembly_output.output += ".globl " + function_definition.function_name + "\n";
     assembly_output.output += function_definition.function_name + ":\n";
     generate_function_prologue(assembly_output);
+    generate_compound_statement(assembly_output, function_definition.statements);
     generate_function_epilogue(assembly_output);
 }
 void generate_global_variable_definition(assembly_output_t& assembly_output, const ast::global_variable_declaration_t& global_var_def) {

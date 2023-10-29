@@ -133,23 +133,59 @@ void generate_function_prologue(assembly_output_t& assembly_output) { // TODO: h
 
     assembly_output.current_rbp_offset = 0;
 
-    assembly_output.output += "pushq %rbx\n";
-    assembly_output.output += "pushq %r12\n";
-    assembly_output.output += "pushq %r13\n";
-    assembly_output.output += "pushq %r14\n";
-    assembly_output.output += "pushq %r15\n";
+    assembly_output.output += "pushq %rdi\n";
+    assembly_output.output += "pushq %rsi\n";
+    assembly_output.output += "pushq %rdx\n";
+    assembly_output.output += "pushq %rcx\n";
+    assembly_output.output += "pushq %r8\n";
+    assembly_output.output += "pushq %r9\n";
 
-    assembly_output.current_rbp_offset += 5*sizeof(std::uint64_t);
+    assembly_output.output += "subq $16, %rsp\n";
+    assembly_output.output += "movdqu %xmm0, (%rsp)\n";
+    assembly_output.output += "subq $16, %rsp\n";
+    assembly_output.output += "movdqu %xmm1, (%rsp)\n";
+    assembly_output.output += "subq $16, %rsp\n";
+    assembly_output.output += "movdqu %xmm2, (%rsp)\n";
+    assembly_output.output += "subq $16, %rsp\n";
+    assembly_output.output += "movdqu %xmm3, (%rsp)\n";
+    assembly_output.output += "subq $16, %rsp\n";
+    assembly_output.output += "movdqu %xmm4, (%rsp)\n";
+    assembly_output.output += "subq $16, %rsp\n";
+    assembly_output.output += "movdqu %xmm5, (%rsp)\n";
+    assembly_output.output += "subq $16, %rsp\n";
+    assembly_output.output += "movdqu %xmm6, (%rsp)\n";
+    assembly_output.output += "subq $16, %rsp\n";
+    assembly_output.output += "movdqu %xmm7, (%rsp)\n";
+
+    assembly_output.current_rbp_offset += 6*sizeof(std::uint64_t) + 8*16;
 }
 void generate_function_epilogue(assembly_output_t& assembly_output) { // TODO: handle passing other types of parameters than just integer types
-    assembly_output.output += "popq %rbx\n";
-    assembly_output.output += "popq %r12\n";
-    assembly_output.output += "popq %r13\n";
-    assembly_output.output += "popq %r14\n";
-    assembly_output.output += "popq %r15\n";
+    assembly_output.output += "movdqu (%rsp), %xmm7\n";
+    assembly_output.output += "addq $16, %rsp\n";
+    assembly_output.output += "movdqu (%rsp), %xmm6\n";
+    assembly_output.output += "addq $16, %rsp\n";
+    assembly_output.output += "movdqu (%rsp), %xmm5\n";
+    assembly_output.output += "addq $16, %rsp\n";
+    assembly_output.output += "movdqu (%rsp), %xmm4\n";
+    assembly_output.output += "addq $16, %rsp\n";
+    assembly_output.output += "movdqu (%rsp), %xmm3\n";
+    assembly_output.output += "addq $16, %rsp\n";
+    assembly_output.output += "movdqu (%rsp), %xmm2\n";
+    assembly_output.output += "addq $16, %rsp\n";
+    assembly_output.output += "movdqu (%rsp), %xmm1\n";
+    assembly_output.output += "addq $16, %rsp\n";
+    assembly_output.output += "movdqu (%rsp), %xmm0\n";
+    assembly_output.output += "addq $16, %rsp\n";
+
+    assembly_output.output += "popq %r9\n";
+    assembly_output.output += "popq %r8\n";
+    assembly_output.output += "popq %rcx\n";
+    assembly_output.output += "popq %rdx\n";
+    assembly_output.output += "popq %rsi\n";
+    assembly_output.output += "popq %rdi\n";
 
     const auto offset = assembly_output.current_rbp_offset;
-    if(offset != (5*sizeof(std::uint64_t))) {
+    if(offset != (6*sizeof(std::uint64_t) + 8*16)) {
         std::cout << "offset: " << offset << '\n';
         throw std::runtime_error("Function epilogue called with extra data on stack.");
     }

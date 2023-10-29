@@ -1,9 +1,6 @@
 #include "type_checker.hpp"
 
 
-bool is_integral(const ast::type_t& lhs) {
-    return lhs.type_category == ast::type_category_t::INT || lhs.type_category == ast::type_category_t::UNSIGNED_INT;
-}
 bool is_arithmetic(const ast::type_t& lhs) {
     switch(lhs.type_category) {
         case ast::type_category_t::INT:

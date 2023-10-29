@@ -9,4 +9,6 @@ double dob = 2.367;
 float flo = 215.987;
 int in = 9.8;
 
-int main() {}
+int main() {
+    return 9;
+}
