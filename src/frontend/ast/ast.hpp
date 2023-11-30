@@ -243,3 +243,8 @@ type_punned_constant_t get_type_punned_constant(const ast::expression_t& expr);
 inline bool is_integral(const ast::type_t& lhs) {
     return lhs.type_category == ast::type_category_t::INT || lhs.type_category == ast::type_category_t::UNSIGNED_INT;
 }
+
+// defined in parser.cpp
+std::optional<ast::type_t> get_aliased_type_name(const ast::type_table_t& type_table, const ast::type_name_t& type_name);
+std::optional<ast::type_t> get_aliased_type(const ast::type_table_t& type_table, const ast::type_t& type);
+

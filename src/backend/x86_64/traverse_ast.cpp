@@ -218,12 +218,46 @@ void generate_compound_statement(assembly_output_t& assembly_output, const ast::
     }
     assembly_output.current_rbp_offset -= rsp_offset;
 }
+void generate_integer_parameter_allocation(assembly_output_t& assembly_output, const ast::type_t& param) {
+    
+}
+void generate_float_parameter_allocation(assembly_output_t& assembly_output, const ast::type_t& param) {
+    
+}
+void generate_destruct_parameter_allocation(assembly_output_t& assembly_output, const ast::type_t& param) {
+    
+}
+void generate_parameter_allocation(assembly_output_t& assembly_output, const ast::type_t& param) {
+    if(is_integral(param)) {
+        generate_integer_parameter_allocation(assembly_output, param);
+    } else if(param.type_category == ast::type_category_t::FLOATING) {
+        generate_float_parameter_allocation(assembly_output, param);
+    } else if(param.type_category == ast::type_category_t::TYPEDEF) {
+        generate_parameter_allocation(assembly_output, get_aliased_type(assembly_output.type_table, param).value());
+    } else if(param.type_category == ast::type_category_t::STRUCT) {
+        generate_destruct_parameter_allocation(assembly_output, param);
+    } else {
+        throw std::runtime_error("Invalid parameter type.");
+    }
+}
+void generate_parameters_allocation(assembly_output_t& assembly_output, const std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>>& params) {
+    for(const auto &param : params) {
+        if(param.second.has_value()) {
+            generate_parameter_allocation(assembly_output, param.first);
+        }
+    }
+}
+void generate_parameters_deallocation(assembly_output_t& assembly_output, const std::vector<std::pair<ast::type_t, std::optional<ast::var_name_t>>>& params) {
+    
+}
 void generate_function_definition(assembly_output_t& assembly_output, const ast::function_definition_t& function_definition) {
     assembly_output.output += ".text\n";
     assembly_output.output += ".globl " + function_definition.function_name + "\n";
     assembly_output.output += function_definition.function_name + ":\n";
     generate_function_prologue(assembly_output);
+    generate_parameters_allocation(assembly_output, function_definition.params);
     generate_compound_statement(assembly_output, function_definition.statements);
+    generate_parameters_deallocation(assembly_output, function_definition.params);
     generate_function_epilogue(assembly_output);
 }
 void generate_global_variable_definition(assembly_output_t& assembly_output, const ast::global_variable_declaration_t& global_var_def) {

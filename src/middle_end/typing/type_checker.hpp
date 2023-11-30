@@ -2,6 +2,7 @@
 
 
 #include <frontend/ast/ast.hpp>
+#include <backend/interpreter/compile_time_evaluator.hpp>
 
 
 bool is_convertible(const ast::type_t& lhs, const ast::type_t& rhs);

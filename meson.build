@@ -1,10 +1,11 @@
 project('foo_cc', 'cpp',
     version : '0.1',
-    default_options : ['warning_level=3', 'cpp_std=c++17'])
+    #default_options : ['warning_level=3', 'cpp_std=c++17'])
+    default_options : ['warning_level=0', 'cpp_std=c++17'])
 
 add_global_arguments('-O0', language : 'cpp')
-add_global_arguments('-Wall', language : 'cpp')
-add_global_arguments('-Wextra', language : 'cpp')
+#add_global_arguments('-Wall', language : 'cpp')
+#add_global_arguments('-Wextra', language : 'cpp')
 add_global_arguments('-fsanitize=address', language : 'cpp')
 add_global_arguments('--coverage', language : 'cpp')
 add_global_arguments('-g', language : 'cpp')

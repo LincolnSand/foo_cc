@@ -323,7 +323,7 @@ static ast::constant_t parse_constant(parser_t& parser, const std::size_t suffix
     return ast::constant_t { result };
 }
 static ast::expression_t parse_char_constant(parser_t& parser) {
-    return ast::expression_t { ast::constant_t { parser.advance_token().token_text[1] }, make_primitive_type_t(ast::type_category_t::INT, "char", sizeof(char), sizeof(char)) };
+    return ast::expression_t { ast::constant_t { parser.advance_token().token_text[1] }, make_primitive_type_t(ast::type_category_t::INT, "char", sizeof(char), alignof(char)) };
 }
 static ast::expression_t parse_int_constant(parser_t& parser) {
     return ast::expression_t { parse_constant<int>(parser), make_primitive_type_t(ast::type_category_t::INT, "int", sizeof(std::int32_t), alignof(std::int32_t)) };
@@ -1191,6 +1191,30 @@ ast::type_t parse_and_validate_type(parser_t& parser) {
         return actual_type_alias_iter->second;
     }
 }
+
+// TODO: maybe move to and create ast.cpp:
+std::optional<ast::type_t> get_aliased_type_name(const ast::type_table_t& type_table, const ast::type_name_t& type_name) {
+    auto type_iter = type_table.at(static_cast<std::uint32_t>(ast::type_category_t::TYPEDEF)).find(type_name);
+    if(type_iter == std::end(type_table.at(static_cast<std::uint32_t>(ast::type_category_t::TYPEDEF)))) {
+        return std::nullopt;
+    }
+    while(type_iter->second.type_category == ast::type_category_t::TYPEDEF) {
+        auto& aliased_type_table = type_table.at(static_cast<std::uint32_t>(type_iter->second.aliased_type_category.value()));
+        auto new_type_iter = aliased_type_table.find(type_iter->second.aliased_type.value());
+        if(new_type_iter == std::end(aliased_type_table)) {
+            return std::nullopt;
+        }
+        type_iter = new_type_iter;
+    }
+    return type_iter->second;
+}
+std::optional<ast::type_t> get_aliased_type(const ast::type_table_t& type_table, const ast::type_t& type) {
+    if(type.type_category != ast::type_category_t::TYPEDEF) {
+        throw std::logic_error("Expected type category to be TYPEDEF.");
+    }
+    return get_aliased_type_name(type_table, type.type_name);
+}
+
 ast::type_t parse_typedef_struct_decl_or_def(parser_t& parser) {
     parser.expect_token(token_type_t::STRUCT_KEYWORD, "Expected `struct` keyword in struct declaration/definition.");
 

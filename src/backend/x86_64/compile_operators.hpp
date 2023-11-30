@@ -11,16 +11,30 @@
 #include <utils/data_structures/random_access_stack.hpp>
 
 
+namespace backend {
+struct parameters_info_t {
+    // TODO: Note `long double` will NOT be supported in the near future because of how complex its calling convention is
+    std::uint32_t number_of_INTEGER_class_parameters = 0u;
+    std::uint32_t number_of_SEE_class_parameters = 0u;
+    std::uint32_t number_of_MEMORY_class_parameters = 0u;
+};
+}
+
 struct assembly_output_t  {
     std::string output;
-    // Because of the .align gas directive, these should be unnecessary (we are also only using .data right now)
-    //std::uint64_t data_section_size = 0u; //number of bytes offset from beginning of .data section
-    //std::uint64_t rodata_section_size = 0u; //number of bytes offset from beginning of .rodata section
-    //std::uint64_t bss_section_size = 0u; //number of bytes offset from beginning of .bss section
+
+    // NOTE: Because of the .align gas directive, we don't need to align global variables
+
     std::uint64_t current_label_number = 0u; // appended to the end of labels so we don't get duplicate labels for things like boolean short circuiting and if statements
+
     utils::data_structures::backend_variable_lookup_t variable_lookup;
-    std::uint64_t current_rbp_offset; // appended to `-` symbol since the stack grows downwards on x86_64
+
     // For now, we will just align all variables to 8 bytes (64 bits) for stack allocations
+    std::uint64_t current_rbp_offset; // appended to `-` symbol since the stack grows downwards on x86_64
+
+    backend::parameters_info_t parameters_info;
+
+    ast::type_table_t type_table;
 
     assembly_output_t() = default;
     assembly_output_t(std::string output) : output(std::move(output)) {}

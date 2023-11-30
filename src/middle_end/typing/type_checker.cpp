@@ -513,6 +513,55 @@ void type_check_compound_statement(ast::compound_statement_t& compound_statement
 void type_check_function_definition(ast::function_definition_t& function_definition) {
     type_check_compound_statement(function_definition.statements, function_definition.return_type);
 }
+ast::type_t get_type_from_constant_value(const ast::constant_t& value) {
+    return std::visit(overloaded{
+        [](char c) {
+            return make_primitive_type_t(ast::type_category_t::INT, "char", sizeof(char), alignof(char));
+        },
+        [](signed char c) {
+            return make_primitive_type_t(ast::type_category_t::INT, "signed char", sizeof(signed char), alignof(signed char));
+        },
+        [](unsigned char c) {
+            return make_primitive_type_t(ast::type_category_t::UNSIGNED_INT, "unsigned char", sizeof(unsigned char), alignof(unsigned char));
+        },
+        [](short s) {
+            return make_primitive_type_t(ast::type_category_t::INT, "short", sizeof(short), alignof(short));
+        },
+        [](unsigned short s) {
+            return make_primitive_type_t(ast::type_category_t::UNSIGNED_INT, "unsigned short", sizeof(unsigned short), alignof(unsigned short));
+        },
+        [](int i) {
+            return make_primitive_type_t(ast::type_category_t::INT, "int", sizeof(int), alignof(int));
+        },
+        [](unsigned int i) {
+            return make_primitive_type_t(ast::type_category_t::UNSIGNED_INT, "unsigned int", sizeof(unsigned int), alignof(unsigned int));
+        },
+        [](long l) {
+            return make_primitive_type_t(ast::type_category_t::INT, "long", sizeof(long), alignof(long));
+        },
+        [](unsigned long l) {
+            return make_primitive_type_t(ast::type_category_t::UNSIGNED_INT, "unsigned long", sizeof(unsigned long), alignof(unsigned long));
+        },
+        [](long long ll) {
+            return make_primitive_type_t(ast::type_category_t::INT, "long long", sizeof(long long), alignof(long long));
+        },
+        [](unsigned long long ll) {
+            return make_primitive_type_t(ast::type_category_t::UNSIGNED_INT, "unsigned long long", sizeof(unsigned long long), alignof(unsigned long long));
+        },
+        [](float f) {
+            return make_primitive_type_t(ast::type_category_t::FLOATING, "float", sizeof(float), alignof(float));
+        },
+        [](double d) {
+            return make_primitive_type_t(ast::type_category_t::FLOATING, "double", sizeof(double), alignof(double));
+        },
+        [](long double ld) {
+            return make_primitive_type_t(ast::type_category_t::FLOATING, "long double", sizeof(long double), alignof(long double));
+        },
+        [](const auto&) {
+            throw std::logic_error("Unsupported constant type.");
+        }
+    }, value.value);
+}
 void type_check(ast::validated_program_t& validated_program) {
     for(auto& e : validated_program.top_level_declarations) {
         std::visit(overloaded{
@@ -522,6 +571,11 @@ void type_check(ast::validated_program_t& validated_program) {
             [](ast::global_variable_declaration_t& global_var_def) {
                 // TODO: move compile time evaluation of global variables to here from `validate_ast.cpp`
                 if(global_var_def.value.has_value()) {
+                    if(!global_var_def.value.value().type.has_value()) {
+                        auto expression_value = evaluate_expression(global_var_def.value.value());
+                        ast::type_t expression_type = get_type_from_constant_value(expression_value);
+                        global_var_def.value.value() = ast::expression_t{std::move(expression_value), std::move(expression_type)};
+                    }
                     if(is_convertible(global_var_def.type_name, global_var_def.value.value().type.value())) {
                         if(!compare_type_names(global_var_def.type_name, global_var_def.value.value().type.value())) {
                             global_var_def.value = make_convert_t(std::move(global_var_def.value.value()), global_var_def.type_name);

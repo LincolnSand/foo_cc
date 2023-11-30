@@ -20,7 +20,7 @@
 #include <exception_stack_trace.hpp>
 
 
-//#define FUZZING
+#define FUZZING
 
 int main(int argc, char** argv) {
     std::string out_filename;
