@@ -32,15 +32,21 @@ ast::constant_t evaluate_unary_expression(const ast::constant_t& operand, const 
 ast::constant_t evaluate_binary_expression(const ast::constant_t& left, const ast::constant_t& right, const ast::binary_operator_token_t operator_token) {
     // TODO: Add support for different types (e.g. double) as well as operands of different types (e.g. double + int).
     return std::visit(overloaded{
-        [operator_token, &right](const int unwrapped_left) {
+        [operator_token, right](const int unwrapped_left) {
             return std::visit(overloaded{
-                [operator_token, &unwrapped_left](const int unwrapped_right) {
+                [operator_token, unwrapped_left](const int unwrapped_right) -> ast::constant_t {
                     switch(operator_token) {
                         case ast::binary_operator_token_t::MULTIPLY:
                             return ast::constant_t{unwrapped_left * unwrapped_right};
                         case ast::binary_operator_token_t::DIVIDE:
+                            if(unwrapped_right == 0) {
+                                throw std::runtime_error("Division by zero.");
+                            }
                             return ast::constant_t{unwrapped_left / unwrapped_right};
                         case ast::binary_operator_token_t::MODULO:
+                            if(unwrapped_right == 0) {
+                                throw std::runtime_error("Division by zero.");
+                            }
                             return ast::constant_t{unwrapped_left % unwrapped_right};
                         case ast::binary_operator_token_t::PLUS:
                             return ast::constant_t{unwrapped_left + unwrapped_right};
