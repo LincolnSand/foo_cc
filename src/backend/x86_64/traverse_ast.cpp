@@ -261,9 +261,10 @@ void generate_function_definition(assembly_output_t& assembly_output, const ast:
     generate_function_epilogue(assembly_output);
 }
 void generate_global_variable_definition(assembly_output_t& assembly_output, const ast::global_variable_declaration_t& global_var_def) {
+    ast::type_t underlying_type = get_underlying_type(assembly_output.type_table, global_var_def.type_name).value();
     // For now, we will only allocate and use .data, but we will use .rodata and .bss in the future
-    const auto required_alignment = global_var_def.type_name.alignment.value();
-    const auto allocation_size = global_var_def.type_name.size.value();
+    const auto required_alignment = underlying_type.alignment.value();
+    const auto allocation_size = underlying_type.size.value();
     if(!global_var_def.value.has_value() || is_constant_with_value_zero(global_var_def.value.value())) {
         assembly_output.output += ".bss\n";
         assembly_output.output += ".align " + std::to_string(required_alignment) + "\n";
@@ -323,6 +324,7 @@ void generate_program(assembly_output_t& assembly_output, const ast::validated_p
 }
 std::string generate_asm(const ast::validated_program_t& program) {
     assembly_output_t assembly_output;
+    assembly_output.type_table = program.type_table;
     generate_program(assembly_output, program);
     return assembly_output.output;
 }

@@ -172,7 +172,7 @@ inline std::shared_ptr<ast::grouping_t> make_grouping(ast::expression_t&& exp) {
 }
 
 
-// TODO: maybe I should make these functions actually add the types to the type table in addition to just constructing/returning them
+// TODO: Maybe I should make these functions actually add the types to the type table in addition to just constructing/returning them
 // Does NOT add the type to the type_table; it is merely a convenience factory function that returns a constructed `type_t`.
 inline ast::type_t make_primitive_type_t(ast::type_category_t type_category, ast::type_name_t type_name, std::size_t size, std::size_t alignment) {
     return ast::type_t{type_category, std::move(type_name), std::nullopt, std::nullopt, size, alignment, {}, {}};
@@ -196,6 +196,7 @@ inline ast::type_t make_struct_forward_decl_type_t(ast::type_name_t type_name) {
     return ast::type_t{ast::type_category_t::STRUCT, std::move(type_name), std::nullopt, std::nullopt, std::nullopt, std::nullopt, {}, {}};
 }
 inline ast::type_t make_struct_definition_type_t(const ast::type_table_t& type_table, ast::type_name_t type_name, std::vector<ast::type_t> field_types, std::vector<std::string> field_names) {
+    std::cout << "make_struct_definition_type_t: " << type_name << "\n";
     if(field_types.size() != field_names.size()) {
         throw std::logic_error("Mismatch of number of field names and types.");
     }
@@ -211,7 +212,7 @@ inline ast::type_t make_struct_definition_type_t(const ast::type_table_t& type_t
             throw std::runtime_error("You cannot instantiate a struct forward declaration.");
         }
         struct_size += member_type.size.value();
-        // TODO: maybe insert dummy padding members to make life easier later during assembly codegen
+        // TODO: Maybe insert dummy padding members to make life easier later during assembly codegen
         struct_size += (prior_field_size % member_type.alignment.value()); // round up to abide by alignment requirements of fields
         prior_field_size = member_type.size.value();
         struct_alignment = std::max(struct_alignment, member_type.alignment.value());
@@ -247,4 +248,4 @@ inline bool is_integral(const ast::type_t& lhs) {
 // defined in parser.cpp
 std::optional<ast::type_t> get_aliased_type_name(const ast::type_table_t& type_table, const ast::type_name_t& type_name);
 std::optional<ast::type_t> get_aliased_type(const ast::type_table_t& type_table, const ast::type_t& type);
-
+std::optional<ast::type_t> get_underlying_type(const ast::type_table_t& type_table, const ast::type_t& type);

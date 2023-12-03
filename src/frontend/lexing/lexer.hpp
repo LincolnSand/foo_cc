@@ -94,6 +94,7 @@ struct lexer_t {
         current_line_number(1)
     {}
 
+    // TODO: We should detect eof by using the length of the file we load instead of checking for a null terminator
     bool is_eof() const {
         return *current == '\0';
     }
@@ -145,6 +146,9 @@ struct lexer_t {
 
     // factory to use once token string is lexed
     token_t make_token(token_type_t token_type) const {
+        if(token_type == token_type_t::ERROR) {
+            std::cout << "Error token emited\n";
+        }
         return token_t{token_type, {start, current_token_str_len()}, current_line_number};
     }
 };

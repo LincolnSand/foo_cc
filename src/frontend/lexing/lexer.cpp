@@ -345,18 +345,17 @@ token_t scan_token(lexer_t& lexer) {
     std::cout << "Unrecognized token: '" << c << "'\n";
     return lexer.make_token(token_type_t::ERROR);
 }
-// TODO: double check that `merge_tokens` is correct and test it thoroughly
+// TODO: Double check that `merge_tokens` is correct and test it thoroughly
 std::vector<token_t> merge_tokens(const std::vector<token_t>& tokens) {
     std::vector<token_t> result;
     result.reserve(tokens.size());
 
-    std::uint32_t i = 0;
-    for(;;) {
+    for(std::uint32_t i = 0; ;) {
         if(i >= tokens.size()) {
             break;
         }
         const auto token = tokens.at(i);
-        // TODO: remove a bunch of code duplication and clean this up
+        // TODO: Remove a bunch of code duplication and clean this up
         if(token.token_type == token_type_t::UNSIGNED_KEYWORD) {
             if((++i) >= tokens.size()) {
                 result.push_back(token_t{token_type_t::UNSIGNED_INT_KEYWORD, "unsigned int", token.line_number});

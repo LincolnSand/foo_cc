@@ -2,6 +2,7 @@
 
 
 ast::constant_t evaluate_unary_expression(const ast::constant_t& operand, const ast::unary_operator_token_t operator_token) {
+    // TODO: Support other types than just `int`
     return std::visit(overloaded{
         [operator_token](const int unwrapped_operand) {
             switch(operator_token) {
@@ -29,12 +30,88 @@ ast::constant_t evaluate_unary_expression(const ast::constant_t& operand, const 
         }
     }, operand.value);
 }
+template<typename T, typename U>
+static ast::constant_t evaluate_floating_binary_expression(const T unwrapped_left, const U unwrapped_right, const ast::binary_operator_token_t operator_token) {
+    switch(operator_token) {
+        case ast::binary_operator_token_t::MULTIPLY:
+            return ast::constant_t{unwrapped_left * unwrapped_right};
+        case ast::binary_operator_token_t::DIVIDE:
+            if(unwrapped_right == 0) {
+                throw std::runtime_error("Division by zero.");
+            }
+            return ast::constant_t{unwrapped_left / unwrapped_right};
+        case ast::binary_operator_token_t::PLUS:
+            return ast::constant_t{unwrapped_left + unwrapped_right};
+        case ast::binary_operator_token_t::MINUS:
+            return ast::constant_t{unwrapped_left - unwrapped_right};
+        case ast::binary_operator_token_t::LESS_THAN:
+            return ast::constant_t{unwrapped_left < unwrapped_right};
+        case ast::binary_operator_token_t::LESS_THAN_EQUAL:
+            return ast::constant_t{unwrapped_left <= unwrapped_right};
+        case ast::binary_operator_token_t::GREATER_THAN:
+            return ast::constant_t{unwrapped_left > unwrapped_right};
+        case ast::binary_operator_token_t::GREATER_THAN_EQUAL:
+            return ast::constant_t{unwrapped_left >= unwrapped_right};
+        case ast::binary_operator_token_t::EQUAL:
+            return ast::constant_t{unwrapped_left == unwrapped_right};
+        case ast::binary_operator_token_t::NOT_EQUAL:
+            return ast::constant_t{unwrapped_left != unwrapped_right};
+        // We don't need to handle short circuiting for the subexpressions of logical and & or because assignment, function calls, and other side effect producing operators (e.g. `++`, `--`)
+        //  are disallowed at compile time. So it doesn't matter if we fully evaluate both subexpressions.
+        case ast::binary_operator_token_t::LOGICAL_AND:
+            return ast::constant_t{unwrapped_left && unwrapped_right};
+        case ast::binary_operator_token_t::LOGICAL_OR:
+            return ast::constant_t{unwrapped_left || unwrapped_right};
+        // Because of the aforementioned reasoning regarding short circuiting, using the comma operator at compile time is silly and has no purpose, but it is still valid and supported anyways.
+        case ast::binary_operator_token_t::COMMA:
+            return ast::constant_t{unwrapped_right};
+
+        case ast::binary_operator_token_t::MODULO:
+        case ast::binary_operator_token_t::LEFT_BITSHIFT:
+        case ast::binary_operator_token_t::RIGHT_BITSHIFT:
+        case ast::binary_operator_token_t::BITWISE_AND:
+        case ast::binary_operator_token_t::BITWISE_OR:
+        case ast::binary_operator_token_t::BITWISE_XOR:
+            throw std::runtime_error("Unsupported binary operator.");
+    }
+    throw std::logic_error("Unsupported binary operator.");
+}
 ast::constant_t evaluate_binary_expression(const ast::constant_t& left, const ast::constant_t& right, const ast::binary_operator_token_t operator_token) {
-    // TODO: Add support for different types (e.g. double) as well as operands of different types (e.g. double + int).
+    // TODO: Implement long double support
     return std::visit(overloaded{
-        [operator_token, right](const int unwrapped_left) {
+        [operator_token, right](const float unwrapped_left) -> ast::constant_t {
             return std::visit(overloaded{
-                [operator_token, unwrapped_left](const int unwrapped_right) -> ast::constant_t {
+                [operator_token, unwrapped_left](const auto unwrapped_right) -> ast::constant_t {
+                    return evaluate_floating_binary_expression(unwrapped_left, unwrapped_right, operator_token);
+                }
+            }, right.value);
+        },
+        [operator_token, right](const double unwrapped_left) -> ast::constant_t {
+            return std::visit(overloaded{
+                [operator_token, unwrapped_left](const auto unwrapped_right) -> ast::constant_t {
+                    return evaluate_floating_binary_expression(unwrapped_left, unwrapped_right, operator_token);
+                }
+            }, right.value);
+        },
+        [operator_token, right](const long double unwrapped_left) -> ast::constant_t {
+            return std::visit(overloaded{
+                [operator_token, unwrapped_left](const auto unwrapped_right) -> ast::constant_t {
+                    return evaluate_floating_binary_expression(unwrapped_left, unwrapped_right, operator_token);
+                }
+            }, right.value);
+        },
+        [operator_token, right](const auto unwrapped_left) {
+            return std::visit(overloaded{
+                [operator_token, unwrapped_left](const float unwrapped_right) -> ast::constant_t {
+                    return evaluate_floating_binary_expression(unwrapped_left, unwrapped_right, operator_token);
+                },
+                [operator_token, unwrapped_left](const double unwrapped_right) -> ast::constant_t {
+                    return evaluate_floating_binary_expression(unwrapped_left, unwrapped_right, operator_token);
+                },
+                [operator_token, unwrapped_left](const long double unwrapped_right) -> ast::constant_t {
+                    return evaluate_floating_binary_expression(unwrapped_left, unwrapped_right, operator_token);
+                },
+                [operator_token, unwrapped_left](const auto unwrapped_right) -> ast::constant_t {
                     switch(operator_token) {
                         case ast::binary_operator_token_t::MULTIPLY:
                             return ast::constant_t{unwrapped_left * unwrapped_right};
@@ -85,17 +162,8 @@ ast::constant_t evaluate_binary_expression(const ast::constant_t& left, const as
                             return ast::constant_t{unwrapped_right};
                     }
                     throw std::logic_error("Unsupported binary operator.");
-                },
-                [](const auto&) -> ast::constant_t {
-                    throw std::runtime_error("Operands are of different types.");
-                    return {};
                 }
             }, right.value);
-        },
-        [](const auto& unwrapped_left) -> ast::constant_t {
-            // TODO: implement at some point
-            throw std::runtime_error("Currently only integer types are supported at compile time.");
-            return {};
         }
     }, left.value);
 }

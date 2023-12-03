@@ -1192,7 +1192,7 @@ ast::type_t parse_and_validate_type(parser_t& parser) {
     }
 }
 
-// TODO: maybe move to and create ast.cpp:
+// TODO: Maybe move to and create ast.cpp:
 std::optional<ast::type_t> get_aliased_type_name(const ast::type_table_t& type_table, const ast::type_name_t& type_name) {
     auto type_iter = type_table.at(static_cast<std::uint32_t>(ast::type_category_t::TYPEDEF)).find(type_name);
     if(type_iter == std::end(type_table.at(static_cast<std::uint32_t>(ast::type_category_t::TYPEDEF)))) {
@@ -1213,6 +1213,12 @@ std::optional<ast::type_t> get_aliased_type(const ast::type_table_t& type_table,
         throw std::logic_error("Expected type category to be TYPEDEF.");
     }
     return get_aliased_type_name(type_table, type.type_name);
+}
+std::optional<ast::type_t> get_underlying_type(const ast::type_table_t& type_table, const ast::type_t& type) {
+    if(type.type_category != ast::type_category_t::TYPEDEF) {
+        return type;
+    }
+    return get_aliased_type(type_table, type);
 }
 
 ast::type_t parse_typedef_struct_decl_or_def(parser_t& parser) {
