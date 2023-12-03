@@ -2,7 +2,6 @@
 
 
 ast::constant_t evaluate_unary_expression(const ast::constant_t& operand, const ast::unary_operator_token_t operator_token) {
-    // TODO: Support other types than just `int`
     return std::visit(overloaded{
         [operator_token](const int unwrapped_operand) {
             switch(operator_token) {
@@ -25,6 +24,9 @@ ast::constant_t evaluate_unary_expression(const ast::constant_t& operand, const 
                     return  ast::constant_t{-unwrapped_operand};
                 case ast::unary_operator_token_t::LOGICAL_NOT:
                     return  ast::constant_t{!unwrapped_operand};
+
+                case ast::unary_operator_token_t::BITWISE_NOT:
+                    throw std::runtime_error("Unsupported unary operator.");
             }
             throw std::logic_error("Unsupported unary operator.");
         }
